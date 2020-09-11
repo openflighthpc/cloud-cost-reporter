@@ -1,4 +1,5 @@
 require 'aws-sdk-costexplorer'
+require 'aws-sdk-cloudwatch'
 load './models/project.rb'
 
 class AwsProject < Project
@@ -6,6 +7,7 @@ class AwsProject < Project
 
   def add_explorer
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
+    @watcher = Aws::CloudWatch::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: 'eu-west-2')
   end
 
   def get_cost_and_usage
@@ -50,6 +52,10 @@ class AwsProject < Project
   def get_instance_usage_data(instance_id)
     hours = @explorer.get_cost_and_usage_with_resources(instance_usage_query(instance_id))
     cost = @explorer.get_cost_and_usage_with_resources(instance_cost_query(instance_id))
+  end
+
+  def get_instance_cpu_utlization(instance_id)
+    puts @watcher.get_metric_statistics(instance_cpu_utilization_query(instance_id))
   end
 
   private
@@ -205,6 +211,34 @@ class AwsProject < Project
         ]
       },
       group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
+    }
+  end
+
+  def instances_cpu_utilization_query
+    {
+      namespace: "AWS/EC2",
+      metric_name: "CPUUtilization",
+      start_time: Date.today.to_time.strftime('%Y-%m-%dT%H:%M:%S'),
+      end_time: (Date.today + 1).to_time.strftime('%Y-%m-%dT%H:%M:%S'),
+      period: 86400,
+      statistics: ["Average", "Maximum"]
+    }
+  end
+
+  def instance_cpu_utilization_query(id)
+    {
+      namespace: "AWS/EC2",
+      metric_name: "CPUUtilization",
+      dimensions: [
+        {
+          name: 'InstanceId',
+          value: id
+        }
+      ],
+      start_time: Date.today.to_time.strftime('%Y-%m-%dT%H:%M:%S'),
+      end_time: (Date.today + 1).to_time.strftime('%Y-%m-%dT%H:%M:%S'),
+      period: 86400,
+      statistics: ["Average", "Maximum"]
     }
   end
 end

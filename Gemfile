@@ -6,6 +6,7 @@ git_source(:github) {|repo_name| "https://github.com/#{repo_name}" }
 
 gem 'aws-sdk-core'
 gem 'aws-sdk-costexplorer'
+gem 'aws-sdk-cloudwatch'
 gem 'httparty'
 gem 'sqlite3'
 gem 'activerecord'
