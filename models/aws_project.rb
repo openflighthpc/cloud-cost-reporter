@@ -1,4 +1,4 @@
-require 'aws-sdk'
+require 'aws-sdk-costexplorer'
 load './models/project.rb'
 
 class AwsProject < Project
