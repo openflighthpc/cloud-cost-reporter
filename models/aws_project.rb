@@ -1,6 +1,8 @@
 require 'aws-sdk-costexplorer'
 require 'aws-sdk-cloudwatch'
+require 'aws-sdk-ec2'
 load './models/project.rb'
+load './models/log.rb'
 
 class AwsProject < Project
   after_initialize :add_explorer
@@ -8,6 +10,7 @@ class AwsProject < Project
   def add_explorer
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
     @watcher = Aws::CloudWatch::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: 'eu-west-2')
+    @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: 'eu-west-2')
   end
 
   def get_cost_and_usage
@@ -15,21 +18,24 @@ class AwsProject < Project
     compute_units = (daily_cost.to_f * 10).ceil
     risk_units = (compute_units * 1.25).ceil
 
+    overall_usage = get_overall_usage
+    
     usage_by_instance_type = @explorer.get_cost_and_usage(instance_type_usage_query)
-    usage = ""
+    usage_breakdown = ""
 
     usage_by_instance_type.results_by_time[0].groups.each do |group|
-      usage << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t "
+      usage_breakdown << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t "
     end
 
-    usage = usage == "" ? "None" : usage
+    usage_breakdown = usage_breakdown == "" ? "None" : usage_breakdown
 
     msg = "
       :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
       *USD:* #{daily_cost.to_f.round(2)}
       *Compute Units (Flat):* #{compute_units}
       *Compute Units (Risk):* #{risk_units}
-      *Usage:* #{usage}
+      *Usage:* #{overall_usage}
+      *Hours:* #{usage_breakdown}
     "
 
     send_slack_message(msg)
@@ -56,6 +62,50 @@ class AwsProject < Project
 
   def get_instance_cpu_utlization(instance_id)
     puts @watcher.get_metric_statistics(instance_cpu_utilization_query(instance_id))
+  end
+
+  def record_instance_logs
+    @instances_checker.describe_instances.reservations.each do |reservation|
+      reservation.instances.each do |instance|
+        named = ""
+        instance.tags.each do |tag|
+          if tag.key == "Name"
+            named = tag.value
+          end
+        end
+
+        Log.create(
+          instance_id: instance.instance_id,
+          project_id: self.id,
+          instance_name: named,
+          instance_type: instance.instance_type,
+          status: instance.state.name,
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+  end
+
+  def get_overall_usage
+    logs = Log.where(project_id: self.id).where('timestamp LIKE ?', "%#{Date.today - 2}%")
+
+    instance_counts = {}
+    logs.each do |log|
+      if !instance_counts.has_key?(log.instance_type)
+        instance_counts[log.instance_type] = {log.status => 1, "total" => 1}  
+      else
+        instance_counts[log.instance_type][log.status] = instance_counts[log.instance_type][log.status] + 1
+        instance_counts[log.instance_type]["total"] = instance_counts[log.instance_type]["total"] + 1
+      end 
+    end
+
+    overall_usage = ""
+    instance_counts.each do |type|
+      overall_usage << " #{type[1]["total"]} "
+      overall_usage << "x #{type[0]}"
+      overall_usage << "(#{type[1]["stopped"]} stopped)" if type[1]["stopped"] != nil
+    end
+    overall_usage == "" ? "None" : overall_usage
   end
 
   private

@@ -19,9 +19,13 @@ class Project < ActiveRecord::Base
   def get_forecasts
   end
 
+  def record_instance_logs
+  end
+
   def attributes
     {
       name: self.name,
+      id: self.id,
       client_id: self.client_id,
       host: self.host,
       access_key_ident: self.access_key_ident,
