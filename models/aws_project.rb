@@ -36,13 +36,20 @@ class AwsProject < Project
   def get_forecasts
     forecast_cost = @explorer.get_cost_forecast(cost_forecast_query).forecast_results_by_time[0].mean_value.to_f
     forecast_hours = @explorer.get_usage_forecast(usage_forecast_query).forecast_results_by_time[0].mean_value.to_f
+    forecast_cost_rest_of_month = @explorer.get_cost_forecast(rest_of_month_cost_forecast_query).forecast_results_by_time[0].mean_value.to_f
     msg = "
       :crystal_ball: Forecast for #{Date.today} :crystal_ball:
       *USD:* #{forecast_cost.round(2)}
       *Total EC2 Hours:* #{forecast_hours.round(2)}
+      *USD for rest of month:* #{forecast_cost_rest_of_month.round(2)}
     "
 
     send_slack_message(msg)
+  end
+
+  def get_instance_usage_data(instance_id)
+    hours = @explorer.get_cost_and_usage_with_resources(instance_usage_query(instance_id))
+    cost = @explorer.get_cost_and_usage_with_resources(instance_cost_query(instance_id))
   end
 
   private
@@ -101,7 +108,7 @@ class AwsProject < Project
     }
   end
 
-    def cost_forecast_query
+  def cost_forecast_query
     {
       time_period: {
         start: "#{(Date.today).to_s}",
@@ -117,6 +124,87 @@ class AwsProject < Project
           }
         }
       }
+    }
+  end
+
+  def rest_of_month_cost_forecast_query
+    {
+      time_period: {
+        start: "#{(Date.today).to_s}",
+        end: "#{((Date.today >> 1) - Date.today.day + 1).to_s}"
+      },
+      granularity: "MONTHLY",
+      metric: "UNBLENDED_COST",
+      filter: {
+        not: {
+          dimensions: {
+            key: "RECORD_TYPE",
+            values: ["CREDIT"]
+          }
+        }
+      }
+    }
+  end
+
+  def instance_usage_query(id)
+    {
+      time_period: {
+        start: "#{(Date.today - 2).to_s}",
+        end: "#{(Date.today - 1).to_s}"
+      },
+      granularity: "DAILY",
+      metrics: ["USAGE_QUANTITY"],
+      filter: {
+        and: [
+          { 
+            dimensions: {
+              key: "SERVICE",
+              values: ["Amazon Elastic Compute Cloud - Compute"]
+            }
+          },
+          { 
+            dimensions: {
+              key: "RESOURCE_ID",
+              values: [id]
+            }
+          },
+          {
+            dimensions: {
+              key: "USAGE_TYPE_GROUP",
+              values: ["EC2: Running Hours"]
+            }
+          }
+        ]
+      },
+      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
+    }
+  end
+
+  def instance_cost_query(id)
+    {
+      time_period: {
+        start: "#{(Date.today - 2).to_s}",
+        end: "#{(Date.today - 1).to_s}"
+      },
+      granularity: "DAILY",
+      metrics: ["UNBLENDED_COST"],
+      filter: {
+        and: [
+          { 
+            dimensions: {
+              key: "SERVICE",
+              values: ["Amazon Elastic Compute Cloud - Compute"]
+            }
+          },
+          { 
+            dimensions: {
+              key: "RESOURCE_ID",
+              values: [id]
+            }
+          },
+        ]
+      },
+      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
     }
   end
 end
