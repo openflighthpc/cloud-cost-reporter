@@ -28,6 +28,9 @@ GEM
     aws-sdk-ec2 (1.193.0)
       aws-sdk-core (~> 3, >= 3.99.0)
       aws-sigv4 (~> 1.1)
+    aws-sdk-pricing (1.22.0)
+      aws-sdk-core (~> 3, >= 3.99.0)
+      aws-sigv4 (~> 1.1)
     aws-sigv4 (1.2.2)
       aws-eventstream (~> 1, >= 1.0.2)
     concurrent-ruby (1.1.7)
@@ -57,8 +60,12 @@ DEPENDENCIES
   aws-sdk-core
   aws-sdk-costexplorer
   aws-sdk-ec2
+  aws-sdk-pricing
   httparty
   sqlite3
+
+RUBY VERSION
+   ruby 2.5.1p57
 
 BUNDLED WITH
    2.1.4

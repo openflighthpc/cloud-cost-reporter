@@ -42,4 +42,8 @@ class Project < ActiveRecord::Base
   def send_slack_message(msg)
     HTTParty.post("https://slack.com/api/chat.postMessage", headers: {"Authorization": "Bearer #{ENV['SLACK_TOKEN']}"}, body: {"text": msg, "channel": self.slack_channel, "as_user": true})
   end
+
+  def excluded_instance_names
+    %w(gateway gw GW cadmin chead monitor)
+  end
 end

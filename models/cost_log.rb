@@ -14,6 +14,6 @@ class CostLog < ActiveRecord::Base
   end
 
   def fc_credits_cost
-    (risk_cost/2300).ceil
+    (risk_cost.to_f / 2300).ceil
   end
 end
