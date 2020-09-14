@@ -4,6 +4,8 @@ ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_t
 
 class Project < ActiveRecord::Base
   belongs_to :client
+  has_many :cost_logs
+  has_many :instance_logs
   
   def aws?
     self.host.downcase == "aws"
@@ -20,6 +22,9 @@ class Project < ActiveRecord::Base
   end
 
   def record_instance_logs
+  end
+
+  def record_cost_log
   end
 
   def attributes

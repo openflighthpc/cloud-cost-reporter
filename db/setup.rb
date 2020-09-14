@@ -18,12 +18,21 @@ db.execute "CREATE TABLE IF NOT EXISTS projects(
   slack_channel TEXT
 )"
 
-db.execute "CREATE TABLE IF NOT EXISTS logs(
+db.execute "CREATE TABLE IF NOT EXISTS instance_logs(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   project_id INTEGER,
   instance_name TEXT,
   instance_id TEXT,
   instance_type TEXT,
   status TEXT,
+  timestamp TEXT
+)"
+
+db.execute "CREATE TABLE IF NOT EXISTS cost_logs(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER,
+  cost REAL,
+  currency TEXT,
+  date TEXT,
   timestamp TEXT
 )"

@@ -2,7 +2,8 @@ require 'aws-sdk-costexplorer'
 require 'aws-sdk-cloudwatch'
 require 'aws-sdk-ec2'
 load './models/project.rb'
-load './models/log.rb'
+load './models/cost_log.rb'
+load './models/instance_log.rb'
 
 class AwsProject < Project
   after_initialize :add_explorer
@@ -13,29 +14,38 @@ class AwsProject < Project
     @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: 'eu-west-2')
   end
 
-  def get_cost_and_usage
-    daily_cost = @explorer.get_cost_and_usage(cost_query).results_by_time[0].total["UnblendedCost"][:amount]
-    compute_units = (daily_cost.to_f * 10).ceil
-    risk_units = (compute_units * 1.25).ceil
+  def get_cost_and_usage(date=(Date.today - 2))
+    cost_log = self.cost_logs.where(date: date.to_s).first
+    
+    if cost_log == nil
+      daily_cost = @explorer.get_cost_and_usage(cost_query).results_by_time[0].total["UnblendedCost"][:amount]
+      cost_log = CostLog.create(
+        project_id: self.id,
+        cost: daily_cost,
+        currency: "USD",
+        date: date.to_s,
+        timestamp: Time.now.to_s
+      )
+    end
 
     overall_usage = get_overall_usage
     
     usage_by_instance_type = @explorer.get_cost_and_usage(instance_type_usage_query)
-    usage_breakdown = ""
+    usage_breakdown = " "
 
     usage_by_instance_type.results_by_time[0].groups.each do |group|
-      usage_breakdown << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t "
+      usage_breakdown << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t\t\t"
     end
 
     usage_breakdown = usage_breakdown == "" ? "None" : usage_breakdown
 
     msg = "
       :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
-      *USD:* #{daily_cost.to_f.round(2)}
-      *Compute Units (Flat):* #{compute_units}
-      *Compute Units (Risk):* #{risk_units}
-      *Usage:* #{overall_usage}
-      *Hours:* #{usage_breakdown}
+       *USD:* #{cost_log.cost.to_f.ceil(2)}
+       *Compute Units (Flat):* #{cost_log.compute_cost}
+       *Compute Units (Risk):* #{cost_log.risk_cost}
+       *Usage:* #{overall_usage}
+       *Hours:* #{usage_breakdown}
     "
 
     send_slack_message(msg)
@@ -74,7 +84,7 @@ class AwsProject < Project
           end
         end
 
-        Log.create(
+        InstanceLog.create(
           instance_id: instance.instance_id,
           project_id: self.id,
           instance_name: named,
@@ -87,7 +97,7 @@ class AwsProject < Project
   end
 
   def get_overall_usage
-    logs = Log.where(project_id: self.id).where('timestamp LIKE ?', "%#{Date.today - 2}%")
+    logs = InstanceLog.where(project_id: self.id).where('timestamp LIKE ?', "%#{Date.today - 2}%")
 
     instance_counts = {}
     logs.each do |log|
