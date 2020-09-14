@@ -16,10 +16,6 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def get_some_pricing
-    @pricing_checker.get_products(pricing_query)
-  end
-
   def get_cost_and_usage(date=(Date.today - 2))
     cost_log = self.cost_logs.where(date: date.to_s).first
     
@@ -136,8 +132,20 @@ class AwsProject < Project
     cost = @explorer.get_cost_and_usage_with_resources(instance_cost_query(instance_id))
   end
 
-  def get_instance_cpu_utlization(instance_id)
-    puts @watcher.get_metric_statistics(instance_cpu_utilization_query(instance_id))
+  def get_instance_cpu_utilization(instance_id)
+    @watcher.get_metric_statistics(instance_cpu_utilization_query(instance_id))
+  end
+
+  def get_some_pricing
+    @pricing_checker.get_products(pricing_query)
+  end
+
+  def get_data_out
+    @explorer.get_cost_and_usage(data_out_query)
+  end
+
+  def get_ssd_usage
+    puts @explorer.get_cost_and_usage(ssd_usage_query)
   end
 
   private
@@ -345,6 +353,69 @@ class AwsProject < Project
       ], 
       format_version: "aws_v1", 
       max_results: 1, 
+    }
+  end
+
+  def data_out_query
+    {
+      time_period: {
+        start: "#{(Date.today - 2).to_s}",
+        end: "#{(Date.today - 1).to_s}"
+      },
+      granularity: "DAILY",
+      metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
+      filter: {
+        and: [
+          {
+            dimensions: {
+            key: "USAGE_TYPE_GROUP",
+            values: 
+              [
+                "EC2: Data Transfer - Internet (Out)",
+                "EC2: Data Transfer - CloudFront (Out)"
+              ]
+            }
+          },
+          {
+            not: {
+              dimensions: {
+                key: "RECORD_TYPE",
+                values: ["CREDIT"]
+              }
+            }
+          }
+        ]
+      }
+    }
+  end
+
+  def ssd_usage_query
+    {
+      time_period: {
+        start: "#{(Date.today - 2).to_s}",
+        end: "#{(Date.today - 1).to_s}"
+      },
+      granularity: "DAILY",
+      metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
+      filter: {
+        and: [
+          {
+            dimensions: {
+            key: "USAGE_TYPE_GROUP",
+            values: 
+              ["EC2: EBS - SSD(gp2)"]
+            }
+          },
+          {
+            not: {
+              dimensions: {
+                key: "RECORD_TYPE",
+                values: ["CREDIT"]
+              }
+            }
+          }
+        ]
+      }
     }
   end
 end
