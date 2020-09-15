@@ -27,6 +27,9 @@ class Project < ActiveRecord::Base
   def record_cost_log
   end
 
+  def weekly_report
+  end
+
   def attributes
     {
       name: self.name,
@@ -35,15 +38,13 @@ class Project < ActiveRecord::Base
       host: self.host,
       access_key_ident: self.access_key_ident,
       key: self.key,
-      slack_channel: self.slack_channel
+      slack_channel: self.slack_channel,
+      budget: self.budget,
+      start_date: self.start_date
     }
   end
 
   def send_slack_message(msg)
     HTTParty.post("https://slack.com/api/chat.postMessage", headers: {"Authorization": "Bearer #{ENV['SLACK_TOKEN']}"}, body: {"text": msg, "channel": self.slack_channel, "as_user": true})
-  end
-
-  def excluded_instance_names
-    %w(gateway gw GW cadmin chead monitor)
   end
 end
