@@ -11,7 +11,20 @@ class AwsProject < Project
 
   after_initialize :add_sdk_objects
 
+  def access_key_ident
+    @metadata['access_key_ident']
+  end
+
+  def key
+    @metadata['key']
+  end
+
+  def region
+    @metadata['region']
+  end
+
   def add_sdk_objects
+    @metadata = JSON.parse(self.metadata)
     Aws.config.update({region: "us-east-1"})
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
     @watcher = Aws::CloudWatch::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: 'eu-west-2')
