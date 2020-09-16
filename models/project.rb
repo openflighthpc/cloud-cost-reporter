@@ -36,12 +36,10 @@ class Project < ActiveRecord::Base
       id: self.id,
       client_id: self.client_id,
       host: self.host,
-      access_key_ident: self.access_key_ident,
-      key: self.key,
       slack_channel: self.slack_channel,
       budget: self.budget,
       start_date: self.start_date,
-      metadata: JSON.parse(self.metadata),
+      metadata: self.metadata,
     }
   end
 
