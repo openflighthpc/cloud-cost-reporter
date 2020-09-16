@@ -1,0 +1,41 @@
+{
+  "RuleVersion": "CostCategoryExpression.v1",
+  "Rules": [
+    {
+      "Value": "ec2",
+      "Rule": {
+        "And": [
+          {
+            "Dimensions": {
+              "Key": "SERVICE_CODE",
+              "Values": [
+                "AmazonEC2"
+              ],
+              "MatchOptions": [
+                "EQUALS"
+              ]
+            }
+          },
+          {
+            "Not": {
+              "tags": {
+                "Key": "Name",
+                "Values": [
+                  "gateway",
+                  "gw",
+                  "GW",
+                  "cadmin",
+                  "chead",
+                  "monitor"
+                ],
+                "MatchOptions": [
+                  "CONTAINS"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -53,7 +53,7 @@ class AwsProject < Project
   def weekly_report
     record_instance_logs
     get_latest_prices
-    usage = get_overall_usage(Date.today)
+    usage = get_overall_usage(Date.today, true)
     
     start_date = Date.parse(self.start_date)
     costs_so_far = @explorer.get_cost_and_usage(cost_query(start_date, Date.today, "MONTHLY")).results_by_time
@@ -128,16 +128,17 @@ class AwsProject < Project
     send_slack_message(msg)
   end
 
-  def get_overall_usage(date)
+  def get_overall_usage(date, customer_facing=false)
     logs = self.instance_logs.where('timestamp LIKE ?', "%#{date}%").select {|log| log.compute_node?}
 
     instance_counts = {}
     logs.each do |log|
-      if !instance_counts.has_key?(log.instance_type)
-        instance_counts[log.instance_type] = {log.status => 1, "total" => 1}  
+      type = customer_facing == true ? log.customer_facing_type : log.instance_type
+      if !instance_counts.has_key?(type)
+        instance_counts[type] = {log.status => 1, "total" => 1}  
       else
-        instance_counts[log.instance_type][log.status] = instance_counts[log.instance_type][log.status] + 1
-        instance_counts[log.instance_type]["total"] = instance_counts[log.instance_type]["total"] + 1
+        instance_counts[type][log.status] = instance_counts[type][log.status] + 1
+        instance_counts[type]["total"] = instance_counts[type]["total"] + 1
       end
     end
 
@@ -150,7 +151,7 @@ class AwsProject < Project
     overall_usage == "" ? "None" : overall_usage
   end
 
-  def get_usage_hours_by_instance_type(date)
+  def get_usage_hours_by_instance_type(date=(Date.today - 2))
     usage_by_instance_type = @explorer.get_cost_and_usage(instance_type_usage_query(date))
     usage_by_instance_type
     usage_breakdown = " "
@@ -315,6 +316,24 @@ class AwsProject < Project
           }
         }
       }
+    }
+  end
+
+  def each_instance_cost_query
+    {
+      time_period: {
+        start: "#{(Date.today - 2).to_s}",
+        end: "#{(Date.today - 1).to_s}"
+      },
+      granularity: "DAILY",
+      metrics: ["UNBLENDED_COST"],
+      filter: {
+        dimensions: {
+          key: "SERVICE",
+          values: ["Amazon Elastic Compute Cloud - Compute"]
+        }
+      },
+      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
     }
   end
 
