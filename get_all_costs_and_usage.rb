@@ -6,7 +6,7 @@ load './models/ProjectFactory.rb'
 
 ProjectFactory.new().all_projects_as_type.each do |project|
   project.get_cost_and_usage
-  # project.record_instance_logs
+  project.record_instance_logs
   if ARGV.include?("forecasts")
     project.get_forecasts
   end
