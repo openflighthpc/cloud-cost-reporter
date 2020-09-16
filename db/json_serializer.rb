@@ -14,11 +14,11 @@ db.execute "SELECT * FROM projects" do |row|
 end
 
 db.execute "BEGIN TRANSACTION;
-            CREATE TEMPORARY TABLE projects_backup(name,id,client_id,host,slack_channel,metadata);
-            INSERT INTO projects_backup SELECT name,id,client_id,host,slack_channel,metadata FROM projects;
+            CREATE TEMPORARY TABLE projects_backup(name,id,client_id,host,budget,start_date,slack_channel,metadata);
+            INSERT INTO projects_backup SELECT name,id,client_id,host,budget,start_date,slack_channel,metadata FROM projects;
             DROP TABLE projects;
-            CREATE TABLE projects(name,id,client_id,host,slack_channel,metadata);
-            INSERT INTO projects SELECT name,id,client_id,slack_channel,metadata FROM projects_backup;
+            CREATE TABLE projects(name,id,client_id,host,budget,start_date,slack_channel,metadata);
+            INSERT INTO projects SELECT name,id,client_id,host,budget,start_dateslack_channel,metadata FROM projects_backup;
             DROP TABLE projects_backup;
             COMMIT;
           "
