@@ -15,5 +15,5 @@ ProjectFactory.new().all_projects_as_type.each do |project|
   #project.get_instance_cpu_utilization("i-0b2c0cb3524d62615")
   #project.get_data_out
   #project.get_ssd_usage
-  #puts project.get_cost_per_hour('t3.small')
+  #puts project.get_cost_per_hour('r5.2xlarge')
 end
