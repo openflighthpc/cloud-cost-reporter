@@ -19,6 +19,10 @@ class AwsProject < Project
     self.metadata['key']
   end
 
+  def region
+    self.metadata['region']
+  end
+
   def add_sdk_objects
     Aws.config.update({region: "us-east-1"})
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
