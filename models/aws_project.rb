@@ -106,7 +106,8 @@ class AwsProject < Project
       end
     end
     daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
-
+    total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
+    
     remaining_budget = self.budget.to_i - total_costs
     remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
     enough = Date.today + remaining_days + 2 >= (Date.today << 1).beginning_of_month
@@ -124,12 +125,19 @@ class AwsProject < Project
     The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.
     Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day. 
 
-    The total estimated requirement is therefore *#{daily_future_cu + fixed_daily_cu_cost}* compute units per day.
+    The total estimated requirement is therefore *#{total_future_cu}* compute units per day.
 
     *Predicted Usage*
-    Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days.
-    As tracking is *2 days behind*, the budget is predicted to therefore be *#{enough ? "sufficient" : "insufficient"}* for the rest of the month.
     "
+
+    if remaining_budget < 0
+      excess = (total_future_cu * Date.today.end_of_month.day - (Date.today - 2).day)
+      msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* 
+    compute units at the end of the month."
+    else
+      msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days.
+    As tracking is *2 days behind*, the budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+    end
 
     send_slack_message(msg)
   end
