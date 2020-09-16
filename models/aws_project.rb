@@ -71,10 +71,14 @@ class AwsProject < Project
        *Instance Costs(USD):* #{compute_cost_log.cost.to_f.ceil(2)}
        *Compute Units (Flat):* #{compute_cost_log.compute_cost}
        *Compute Units (Risk):* #{compute_cost_log.risk_cost}
-       *Other Costs(USD):* #{total_cost_log.cost.to_f.ceil(2) - compute_cost_log.cost.to_f.ceil(2)}
-       *FC Credits:* #{compute_cost_log.fc_credits_cost}
-       *Usage:* #{overall_usage}
-       *Hours:* #{usage_breakdown}
+
+       *Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}
+       *Total Compute Units (Flat):* #{total_cost_log.compute_cost}
+       *Total Compute Units (Risk):* #{total_cost_log.risk_cost}
+
+       *FC Credits:* #{total_cost_log.fc_credits_cost}
+       *Instance Usage:* #{overall_usage}
+       *Instance Hours:* #{usage_breakdown}
     "
 
     send_slack_message(msg)
@@ -87,7 +91,7 @@ class AwsProject < Project
     
     start_date = Date.parse(self.start_date)
     start_date = start_date > Date.today.beginning_of_month ? start_date : Date.today.beginning_of_month
-    costs_so_far = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today, "MONTHLY")).results_by_time
+    costs_so_far = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today - 2, "MONTHLY")).results_by_time
     total_costs = 0.0
     costs_so_far.each do |month|
       total_costs += month.total["UnblendedCost"][:amount].to_f
@@ -105,26 +109,26 @@ class AwsProject < Project
 
     remaining_budget = self.budget.to_i - total_costs
     remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
+    enough = Date.today + remaining_days + 2 >= (Date.today << 1).beginning_of_month
     
     msg = "
     :calendar: \t\t\t\t Weekly Report \t\t\t\t :calendar:
     *Monthly Budget:* #{self.budget} compute units
-    *Total Cost Since #{self.start_date}:* #{total_costs} compute units
-    *Remaining Budget:* #{remaining_budget} compute units
+    *Total Costs for 1 - #{(Date.today - 2).day} #{Date::MONTHNAMES[Date.today.month]}:* #{total_costs} compute units
+    *Remaining Monthly Budget:* #{remaining_budget} compute units
     
     *Current Usage*
     Currently, the cluster compute nodes are:
     `#{usage}`
 
-    The average cost for these compute nodes, in the above state, is about #{daily_future_cu} compute units per
-    day.
-    Other cluster costs are on average #{fixed_daily_cu_cost} compute units per day. 
+    The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.
+    Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day. 
 
-    The total estimated requirement is therefore #{daily_future_cu + fixed_daily_cu_cost} compute units per day.
+    The total estimated requirement is therefore *#{daily_future_cu + fixed_daily_cu_cost}* compute units per day.
 
     *Predicted Usage*
-    Based on the current usage, the compute node budget will be used up in #{remaining_days)} days.  
-    #{}
+    Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days.
+    As tracking is *2 days behind*, the budget is predicted to therefore be *#{enough ? "sufficient" : "insufficient"}* for the rest of the month.
     "
 
     send_slack_message(msg)
@@ -196,7 +200,7 @@ class AwsProject < Project
     usage_breakdown = " "
 
     usage_by_instance_type.results_by_time[0].groups.each do |group|
-      usage_breakdown << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t\t\t"
+      usage_breakdown << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t\t\t\t\t\t\t"
     end
 
     usage_breakdown == "" ? "None" : usage_breakdown
