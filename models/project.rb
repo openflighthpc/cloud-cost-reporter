@@ -40,9 +40,8 @@ class Project < ActiveRecord::Base
       key: self.key,
       slack_channel: self.slack_channel,
       budget: self.budget,
-      start_date: self.start_date
+      start_date: self.start_date,
       metadata: JSON.parse(self.metadata),
-      slack_channel: self.slack_channel
     }
   end
 
