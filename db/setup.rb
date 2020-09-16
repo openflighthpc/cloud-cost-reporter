@@ -37,6 +37,7 @@ db.execute "CREATE TABLE IF NOT EXISTS cost_logs(
   cost REAL,
   currency TEXT,
   date TEXT,
+  scope TEXT,
   timestamp TEXT
 )"
 

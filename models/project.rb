@@ -51,6 +51,14 @@ class Project < ActiveRecord::Base
   def weekly_report
   end
 
+  def fixed_monthly_cu_cost
+    5000
+  end
+
+  def fixed_daily_cu_cost
+    fixed_monthly_cu_cost / Time.now.end_of_month.day
+  end
+
   def attributes
     {
       name: self.name,

@@ -33,16 +33,32 @@ class AwsProject < Project
   end
 
   def get_cost_and_usage(date=(Date.today - 2))
-    cost_log = self.cost_logs.where(date: date.to_s).first
+    compute_cost_log = self.cost_logs.where(date: date.to_s, scope: "compute").first
     
     # only make query if don't already have data in logs
-    if cost_log == nil
+    if compute_cost_log == nil
       daily_cost = @explorer.get_cost_and_usage(cost_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
-      cost_log = CostLog.create(
+      compute_cost_log = CostLog.create(
         project_id: self.id,
         cost: daily_cost,
         currency: "USD",
         date: date.to_s,
+        scope: "compute",
+        timestamp: Time.now.to_s
+      )
+    end
+
+    total_cost_log = self.cost_logs.where(date: date.to_s, scope: "total").first
+    
+    # only make query if don't already have data in logs
+    if total_cost_log == nil
+      daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+      total_cost_log = CostLog.create(
+        project_id: self.id,
+        cost: daily_cost,
+        currency: "USD",
+        date: date.to_s,
+        scope: "total",
         timestamp: Time.now.to_s
       )
     end
@@ -52,10 +68,11 @@ class AwsProject < Project
 
     msg = "
       :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
-       *USD:* #{cost_log.cost.to_f.ceil(2)}
-       *Compute Units (Flat):* #{cost_log.compute_cost}
-       *Compute Units (Risk):* #{cost_log.risk_cost}
-       *FC Credits:* #{cost_log.fc_credits_cost}
+       *Instance Costs(USD):* #{compute_cost_log.cost.to_f.ceil(2)}
+       *Compute Units (Flat):* #{compute_cost_log.compute_cost}
+       *Compute Units (Risk):* #{compute_cost_log.risk_cost}
+       *Other Costs(USD):* #{total_cost_log.cost.to_f.ceil(2) - compute_cost_log.cost.to_f.ceil(2)}
+       *FC Credits:* #{compute_cost_log.fc_credits_cost}
        *Usage:* #{overall_usage}
        *Hours:* #{usage_breakdown}
     "
@@ -69,7 +86,8 @@ class AwsProject < Project
     usage = get_overall_usage(Date.today, true)
     
     start_date = Date.parse(self.start_date)
-    costs_so_far = @explorer.get_cost_and_usage(cost_query(start_date, Date.today, "MONTHLY")).results_by_time
+    start_date = start_date > Date.today.beginning_of_month ? start_date : Date.today.beginning_of_month
+    costs_so_far = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today, "MONTHLY")).results_by_time
     total_costs = 0.0
     costs_so_far.each do |month|
       total_costs += month.total["UnblendedCost"][:amount].to_f
@@ -86,21 +104,27 @@ class AwsProject < Project
     daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
 
     remaining_budget = self.budget.to_i - total_costs
+    remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
     
     msg = "
     :calendar: \t\t\t\t Weekly Report \t\t\t\t :calendar:
-    *Total Budget:* #{self.budget} compute units
-    *Compute Cost Since #{self.start_date}:* #{total_costs} compute units
+    *Monthly Budget:* #{self.budget} compute units
+    *Total Cost Since #{self.start_date}:* #{total_costs} compute units
     *Remaining Budget:* #{remaining_budget} compute units
     
     *Current Usage*
     Currently, the cluster compute nodes are:
     `#{usage}`
 
-    The average cost for these compute nodes is about #{daily_future_cu} compute units per day.
+    The average cost for these compute nodes, in the above state, is about #{daily_future_cu} compute units per
+    day.
+    Other cluster costs are on average #{fixed_daily_cu_cost} compute units per day. 
+
+    The total estimated requirement is therefore #{daily_future_cu + fixed_daily_cu_cost} compute units per day.
 
     *Predicted Usage*
-    Based on the current usage, the compute node budget will be used up in #{(remaining_budget / daily_future_cu)} days.  
+    Based on the current usage, the compute node budget will be used up in #{remaining_days)} days.  
+    #{}
     "
 
     send_slack_message(msg)
@@ -269,12 +293,31 @@ class AwsProject < Project
             }
           },
           # {
-          #   tags: {
-          #     key: "Compute",
-          #     values: ["true"]
-          #   }
+          #    cost_categories: {
+          #      key: "compute",
+          #      values: ["ec2"]
+          #    }
           # }
         ]
+      },
+    }
+  end
+
+  def all_costs_query(start_date, end_date=(start_date + 1), granularity="DAILY")
+    {
+      time_period: {
+        start: "#{start_date.to_s}",
+        end: "#{end_date.to_s}"
+      },
+      granularity: granularity,
+      metrics: ["UNBLENDED_COST"],
+      filter: {
+        not: {
+          dimensions: {
+            key: "RECORD_TYPE",
+            values: ["CREDIT"]
+          }
+        }
       },
     }
   end
