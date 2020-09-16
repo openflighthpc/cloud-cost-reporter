@@ -13,7 +13,6 @@ db.execute "CREATE TABLE IF NOT EXISTS projects(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   client_id INTEGER,
   host TEXT,
-  slack_channel TEXT,
   budget INTEGER,
   start_date TEXT,
   slack_channel TEXT,
