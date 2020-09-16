@@ -17,6 +17,6 @@ class InstanceLog < ActiveRecord::Base
 
   def customer_facing_type
     customer_facing = InstanceMapping.where(instance_type: self.instance_type)
-    customer_facing.length > 0 ? customer_facing.first.customer_facing_name : self.instance_type
+    customer_facing.length > 0 ? customer_facing.first.customer_facing_name : "Compute (Other)"
   end
 end

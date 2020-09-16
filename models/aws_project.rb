@@ -133,11 +133,15 @@ class AwsProject < Project
 
     instance_counts = {}
     logs.each do |log|
-      type = customer_facing == true ? log.customer_facing_type : log.instance_type
+      type = customer_facing ? log.customer_facing_type : log.instance_type
       if !instance_counts.has_key?(type)
-        instance_counts[type] = {log.status => 1, "total" => 1}  
+        instance_counts[type] = {log.status => 1, "total" => 1}
       else
-        instance_counts[type][log.status] = instance_counts[type][log.status] + 1
+        if !instance_counts[type].has_key?(log.status)
+          instance_counts[type][log.status] = 1
+        else
+          instance_counts[type][log.status] = instance_counts[type][log.status] + 1
+        end
         instance_counts[type]["total"] = instance_counts[type]["total"] + 1
       end
     end
@@ -214,8 +218,8 @@ class AwsProject < Project
   def instance_type_usage_query(date) 
     {
       time_period: {
-        start: "#{date.to_s}",
-        end: "#{(date + 1).to_s}"
+        start: date.to_s,
+        end: (date + 1).to_s
       },
       granularity: "DAILY",
       metrics: ["USAGE_QUANTITY"],
@@ -232,8 +236,8 @@ class AwsProject < Project
   def cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
     {
       time_period: {
-        start: "#{start_date.to_s}",
-        end: "#{end_date.to_s}"
+        start: start_date.to_s,
+        end: end_date.to_s
       },
       granularity: granularity,
       metrics: ["UNBLENDED_COST"],
@@ -267,8 +271,8 @@ class AwsProject < Project
   def usage_forecast_query
     {
       time_period: {
-        start: "#{(Date.today).to_s}",
-        end: "#{(Date.today + 1).to_s}"
+        start: Date.today.to_s,
+        end: (Date.today + 1).to_s
       },
       granularity: "DAILY",
       metric: "USAGE_QUANTITY",
@@ -284,8 +288,8 @@ class AwsProject < Project
   def cost_forecast_query
     {
       time_period: {
-        start: "#{(Date.today).to_s}",
-        end: "#{(Date.today + 1).to_s}"
+        start: (Date.today).to_s,
+        end: (Date.today + 1).to_s
       },
       granularity: "DAILY",
       metric: "UNBLENDED_COST",
@@ -303,8 +307,8 @@ class AwsProject < Project
   def rest_of_month_cost_forecast_query
     {
       time_period: {
-        start: "#{(Date.today).to_s}",
-        end: "#{((Date.today >> 1) - Date.today.day + 1).to_s}"
+        start: (Date.today).to_s,
+        end: ((Date.today >> 1) - Date.today.day + 1).to_s
       },
       granularity: "MONTHLY",
       metric: "UNBLENDED_COST",
@@ -322,8 +326,8 @@ class AwsProject < Project
   def each_instance_cost_query
     {
       time_period: {
-        start: "#{(Date.today - 2).to_s}",
-        end: "#{(Date.today - 1).to_s}"
+        start: (Date.today - 2).to_s,
+        end: (Date.today - 1).to_s
       },
       granularity: "DAILY",
       metrics: ["UNBLENDED_COST"],
@@ -340,8 +344,8 @@ class AwsProject < Project
   def each_instance_usage_query
     {
       time_period: {
-        start: "#{(Date.today - 2).to_s}",
-        end: "#{(Date.today - 1).to_s}"
+        start: (Date.today - 2).to_s,
+        end: (Date.today - 1).to_s
       },
       granularity: "DAILY",
       metrics: ["USAGE_QUANTITY"],
@@ -368,8 +372,8 @@ class AwsProject < Project
   def instance_usage_query(id)
     {
       time_period: {
-        start: "#{(Date.today - 2).to_s}",
-        end: "#{(Date.today - 1).to_s}"
+        start: (Date.today - 2).to_s,
+        end: (Date.today - 1).to_s
       },
       granularity: "DAILY",
       metrics: ["USAGE_QUANTITY"],
@@ -402,8 +406,8 @@ class AwsProject < Project
   def instance_cost_query(id)
     {
       time_period: {
-        start: "#{(Date.today - 2).to_s}",
-        end: "#{(Date.today - 1).to_s}"
+        start: (Date.today - 2).to_s,
+        end: (Date.today - 1).to_s
       },
       granularity: "DAILY",
       metrics: ["UNBLENDED_COST"],
@@ -458,8 +462,8 @@ class AwsProject < Project
   def data_out_query
     {
       time_period: {
-        start: "#{(Date.today - 2).to_s}",
-        end: "#{(Date.today - 1).to_s}"
+        start: (Date.today - 2).to_s,
+        end: (Date.today - 1).to_s
       },
       granularity: "DAILY",
       metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
@@ -491,8 +495,8 @@ class AwsProject < Project
   def ssd_usage_query
     {
       time_period: {
-        start: "#{(Date.today - 2).to_s}",
-        end: "#{(Date.today - 1).to_s}"
+        start: (Date.today - 2).to_s,
+        end: (Date.today - 1).to_s
       },
       granularity: "DAILY",
       metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
