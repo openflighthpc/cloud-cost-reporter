@@ -30,10 +30,10 @@ class AzureProject < Project
 
   def update_bearer_token
     response = HTTParty.post(
-      "https://login.microsoftonline.com/#{self.tenant_id}/oauth2/token",
+      "https://login.microsoftonline.com/#{tenant_id}/oauth2/token",
       body: URI.encode_www_form(
-        client_id: self.azure_client_id,
-        client_secret: self.client_secret,
+        client_id: azure_client_id,
+        client_secret: client_secret,
         resource: 'https://management.azure.com',
         grant_type: 'client_credentials',
       ),
@@ -49,7 +49,7 @@ class AzureProject < Project
       @metadata['bearer_expiry'] = body['expires_on']
       db.execute "UPDATE projects
                   SET metadata = '#{@metadata.to_json}'
-                  WHERE id = #{self.id}"
+                  WHERE id = #{id}"
     else
       raise RuntimeError, "Error obtaining new authorization token. Error code #{response.code}."
     end
@@ -58,7 +58,7 @@ class AzureProject < Project
   private
 
   def construct_metadata
-    @metadata = JSON.parse(self.metadata)
+    @metadata = JSON.parse(metadata)
   end
 
 end
