@@ -31,23 +31,24 @@ class AzureProject < Project
   def update_bearer_token
     response = HTTParty.post(
       "https://login.microsoftonline.com/#{self.tenant_id}/oauth2/token",
-      {
-        'client_id' => self.azure_client_id,
-        'client_secret' => self.client_secret,
-        'resource' => 'https://management.azure.com',
-        'grant_type' => 'client_credentials',
-      },
-      {
+      body: URI.encode_www_form(
+        client_id: self.azure_client_id,
+        client_secret: self.client_secret,
+        resource: 'https://management.azure.com',
+        grant_type: 'client_credentials',
+      ),
+      headers: {
         'Accept' => 'application/json'
       }
     )
 
     if response.success?
+      db = SQLite3::Database.open 'db/cost_tracker.sqlite3'
       body = JSON.parse(response.body)
       @metadata['bearer_token'] = body['access_token']
       @metadata['bearer_expiry'] = body['expires_on']
       db.execute "UPDATE projects
-                  SET metadata = #{@metadata.to_json}
+                  SET metadata = '#{@metadata.to_json}'
                   WHERE id = #{self.id}"
     else
       raise RuntimeError, "Error obtaining new authorization token. Error code #{response.code}."
