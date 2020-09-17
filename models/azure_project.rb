@@ -27,7 +27,7 @@ class AzureProject < Project
     @metadata['bearer_expiry']
   end
 
-  def get_cost_and_usage(date=Date.today-2)
+  def get_cost_and_usage(date=Date.today-2, slack=true)
     # refresh authorization token if necessary
     # tokens last for 3600 seconds (one hour)
     if Time.now.to_i > bearer_expiry.to_i

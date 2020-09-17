@@ -1,4 +1,5 @@
 require 'active_record'
+require_relative 'weekly_report_log'
 
 ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
 
@@ -7,6 +8,7 @@ class Project < ActiveRecord::Base
   belongs_to :customer
   has_many :cost_logs
   has_many :instance_logs
+  has_many :weekly_report_logs
 
   validates :name, presence: true, uniqueness: true
   validates :slack_channel, presence: true
@@ -37,7 +39,7 @@ class Project < ActiveRecord::Base
     Date.parse(self.end_date) > Date.today
   end
 
-  def get_cost_and_usage
+  def get_cost_and_usage(date=Date.today - 2, slack=true)
   end
 
   def get_forecasts
@@ -49,24 +51,11 @@ class Project < ActiveRecord::Base
   def record_cost_log
   end
 
-  def weekly_report
+  def weekly_report(date=Date.today, slack=true)
   end
 
   def fixed_daily_cu_cost
     FIXED_MONTHLY_CU_COST / Time.now.end_of_month.day
-  end
-
-  def attributes
-    {
-      name: self.name,
-      id: self.id,
-      client_id: self.client_id,
-      host: self.host,
-      slack_channel: self.slack_channel,
-      budget: self.budget,
-      start_date: self.start_date,
-      metadata: self.metadata,
-    }
   end
 
   def send_slack_message(msg)

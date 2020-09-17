@@ -36,9 +36,9 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def get_cost_and_usage(date=(Date.today - 2))
-    compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
-    
+  def get_cost_and_usage(date=(Date.today - 2), slack=true)
+    compute_cost_log = self.cost_logs.where(date: date.to_s).first
+
     # only make query if don't already have data in logs
     if !compute_cost_log
       compute_instance_costs = @explorer.get_cost_and_usage_with_resources(each_instance_cost_query(date)).results_by_time[0][:groups]
@@ -54,7 +54,7 @@ class AwsProject < Project
         date: date.to_s,
         scope: "compute",
         timestamp: Time.now.to_s
-      )
+        )
     end
 
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
@@ -69,84 +69,129 @@ class AwsProject < Project
         date: date.to_s,
         scope: "total",
         timestamp: Time.now.to_s
-      )
+        )
     end
 
     overall_usage = get_overall_usage(date)
     usage_breakdown = get_usage_hours_by_instance_type(date)
 
-    msg = "
+    if slack
+      msg = "
       :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
-       *Compute Costs(USD):* #{compute_cost_log.cost.to_f.ceil(2)}
-       *Compute Units (Flat):* #{compute_cost_log.compute_cost}
-       *Compute Units (Risk):* #{compute_cost_log.risk_cost}
+      *Compute Costs (USD):* #{compute_cost_log.cost.to_f.ceil(2)}
+      *Compute Units (Flat):* #{compute_cost_log.compute_cost}
+      *Compute Units (Risk):* #{compute_cost_log.risk_cost}
 
-       *Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}
-       *Total Compute Units (Flat):* #{total_cost_log.compute_cost}
-       *Total Compute Units (Risk):* #{total_cost_log.risk_cost}
+      *Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}
+      *Total Compute Units (Flat):* #{total_cost_log.compute_cost}
+      *Total Compute Units (Risk):* #{total_cost_log.risk_cost}
 
-       *FC Credits:* #{total_cost_log.fc_credits_cost}
-       *Compute Instance Usage:* #{overall_usage}
-       *Compute Instance Hours:* #{usage_breakdown}
-    "
+      *FC Credits:* #{total_cost_log.fc_credits_cost}
+      *Compute Instance Usage:* #{overall_usage}
+      *Compute Instance Hours:* #{usage_breakdown}
+      "
 
-    send_slack_message(msg)
+      send_slack_message(msg)
+    end
+
+    puts "\nProject: #{self.name}"
+    puts "Usage for #{date.to_s}"
+    puts "Compute Costs (USD): #{compute_cost_log.cost.to_f.ceil(2)}"
+    puts "Compute Units (Flat): #{compute_cost_log.compute_cost}"
+    puts "Compute Units (Risk): #{compute_cost_log.risk_cost}"
+    puts "\nTotal Costs (USD): #{total_cost_log.cost.to_f.ceil(2)}"
+    puts "Total Compute Units (Flat): #{total_cost_log.compute_cost}"
+    puts "Total Compute Units (Risk): #{total_cost_log.risk_cost}"
+    puts "\nFC Credits: #{total_cost_log.fc_credits_cost}"
+    puts "Compute Instance Usage: #{overall_usage}"
+    puts "Compute Instance Hours:"
+    puts "#{usage_breakdown.strip.gsub("\t", "")}\n"
+    puts "_" * 50
   end
 
-  def weekly_report
-    record_instance_logs
-    get_latest_prices
-    usage = get_overall_usage(Date.today, true)
-    
-    start_date = Date.parse(self.start_date)
-    start_date = start_date > Date.today.beginning_of_month ? start_date : Date.today.beginning_of_month
-    costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today - 2, "MONTHLY")).results_by_time[0]
-    total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
-    total_costs = (total_costs * 10 * 1.25).ceil
-    
-    logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%").select {|log| log.compute_node?}
-    future_costs = 0.0
-    logs.each do |log|
-      if log.status == "running"
-        future_costs += @@prices[self.region][log.instance_type]
+  def weekly_report(date=Date.today, slack=true)
+    report = self.weekly_report_logs.find_by(date: date)
+    msg = ""
+    if report == nil
+      if date != Date.today
+        puts "No weekly report for project #{self.name} on #{date}." 
+        puts "As the contained data is time specific, can only retrieve saved reports or generate one for today.\n\n"
+        reports = self.weekly_report_logs
+        if reports.length > 0
+          puts "Weekly reports exist for project #{self.name} on the following dates: " 
+          self.weekly_report_logs.each do |report|
+            puts report.date
+          end
+        else
+          puts "No prior weekly reports exist for #{self.name}."
+        end
+        puts "_" * 50
+        puts ""
+        return
       end
-    end
-    daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
-    total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
-    
-    remaining_budget = self.budget.to_i - total_costs
-    remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-    enough = Date.today + remaining_days + 2 >= (Date.today << 1).beginning_of_month
-    date_range = "1 - #{(Date.today - 2).day} #{Date::MONTHNAMES[Date.today.month]}"
-    
-    msg = "
-    :calendar: \t\t\t\t Weekly Report \t\t\t\t :calendar:
-    *Monthly Budget:* #{self.budget} compute units
-    *Total Costs for #{date_range}:* #{total_costs} compute units
-    *Remaining Monthly Budget:* #{remaining_budget} compute units
-    
-    *Current Usage*
-    Currently, the cluster compute nodes are:
-    `#{usage}`
+      record_instance_logs
+      get_latest_prices
+      usage = get_overall_usage(date, true)
 
-    The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.
-    Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day. 
+      start_date = Date.parse(self.start_date)
+      if date < start_date
+        puts "Given date is before the project start date"
+        return
+      end
+      start_date = start_date > Date.today.beginning_of_month ? start_date : Date.today.beginning_of_month
+      costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today - 2, "MONTHLY")).results_by_time[0]
+      total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
+      total_costs = (total_costs * 10 * 1.25).ceil
 
-    The total estimated requirement is therefore *#{total_future_cu}* compute units per day.
+      logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%").select {|log| log.compute_node?}
+      future_costs = 0.0
+      logs.each do |log|
+        if log.status == "running"
+          future_costs += @@prices[self.region][log.instance_type]
+        end
+      end
+      daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
+      total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
-    *Predicted Usage*
-    "
+      remaining_budget = self.budget.to_i - total_costs
+      remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
+      enough = Date.today + remaining_days + 2 >= (Date.today << 1).beginning_of_month
+      date_range = "1 - #{(Date.today - 2).day} #{Date::MONTHNAMES[Date.today.month]}"
 
-    if remaining_budget < 0
-      excess = (total_future_cu * Date.today.end_of_month.day - (Date.today - 2).day)
-      msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* 
-    compute units at the end of the month."
+      msg = "
+      :calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:
+      *Monthly Budget:* #{self.budget} compute units
+      *Total Costs for #{date_range}:* #{total_costs} compute units
+      *Remaining Monthly Budget:* #{remaining_budget} compute units
+
+      *Current Usage*
+      Currently, the cluster compute nodes are:
+      `#{usage}`
+
+      The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.
+      Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day.
+
+      The total estimated requirement is therefore *#{total_future_cu}* compute units per day.
+
+      *Predicted Usage*
+      "
+
+      if remaining_budget < 0
+        excess = (total_future_cu * Date.today.end_of_month.day - (Date.today - 2).day)
+        msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* 
+      compute units at the end of the month."
+      else
+        msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days.
+      As tracking is *2 days behind*, the budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      end
+
+      WeeklyReportLog.create(project_id: self.id, content: msg, date: Date.today, timestamp: Time.now)
     else
-      msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days.
-    As tracking is *2 days behind*, the budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      msg = report.content
     end
-
-    send_slack_message(msg)
+    send_slack_message(msg) if slack
+    puts msg
+    puts '_' * 50
   end
 
   def get_latest_prices
@@ -173,10 +218,10 @@ class AwsProject < Project
     forecast_hours = @explorer.get_usage_forecast(usage_forecast_query).forecast_results_by_time[0].mean_value.to_f
     forecast_cost_rest_of_month = @explorer.get_cost_forecast(rest_of_month_cost_forecast_query).forecast_results_by_time[0].mean_value.to_f
     msg = "
-      :crystal_ball: Forecast for #{Date.today} :crystal_ball:
-      *USD:* #{forecast_cost.round(2)}
-      *Total EC2 Hours:* #{forecast_hours.round(2)}
-      *USD for rest of month:* #{forecast_cost_rest_of_month.round(2)}
+    :crystal_ball: Forecast for #{Date.today} :crystal_ball:
+    *USD:* #{forecast_cost.round(2)}
+    *Total EC2 Hours:* #{forecast_hours.round(2)}
+    *USD for rest of month:* #{forecast_cost_rest_of_month.round(2)}
     "
 
     send_slack_message(msg)
@@ -206,7 +251,7 @@ class AwsProject < Project
       overall_usage << "x #{type[0]}"
       overall_usage << "(#{type[1]["stopped"]} stopped)" if type[1]["stopped"] != nil
     end
-    overall_usage == "" ? "None" : overall_usage
+    overall_usage == "" ? "None recorded" : overall_usage
   end
 
   def get_usage_hours_by_instance_type(date=(Date.today - 2))
@@ -240,7 +285,7 @@ class AwsProject < Project
             status: instance.state.name,
             host: "AWS",
             timestamp: Time.now.to_s
-          )
+            )
         end
       end
     end
