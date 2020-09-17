@@ -23,6 +23,10 @@ class AwsProject < Project
     @metadata['region']
   end
 
+  def excluded_instances
+    @exluded_instances ||= self.instance_logs.select {|i| !i.compute_node?}.map {|i| i.instance_id}.uniq
+  end
+
   def add_sdk_objects
     @metadata = JSON.parse(self.metadata)
     Aws.config.update({region: "us-east-1"})
@@ -37,10 +41,15 @@ class AwsProject < Project
     
     # only make query if don't already have data in logs
     if compute_cost_log == nil
-      daily_cost = @explorer.get_cost_and_usage(cost_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+      compute_instance_costs = @explorer.get_cost_and_usage_with_resources(each_instance_cost_query(date)).results_by_time[0][:groups]
+      compute_cost = 0
+      compute_instance_costs.each do |instance|
+        compute_cost += instance[:metrics]["UnblendedCost"][:amount].to_f
+      end
+      
       compute_cost_log = CostLog.create(
         project_id: self.id,
-        cost: daily_cost,
+        cost: compute_cost,
         currency: "USD",
         date: date.to_s,
         scope: "compute",
@@ -68,7 +77,7 @@ class AwsProject < Project
 
     msg = "
       :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
-       *Instance Costs(USD):* #{compute_cost_log.cost.to_f.ceil(2)}
+       *Compute Costs(USD):* #{compute_cost_log.cost.to_f.ceil(2)}
        *Compute Units (Flat):* #{compute_cost_log.compute_cost}
        *Compute Units (Risk):* #{compute_cost_log.risk_cost}
 
@@ -77,8 +86,8 @@ class AwsProject < Project
        *Total Compute Units (Risk):* #{total_cost_log.risk_cost}
 
        *FC Credits:* #{total_cost_log.fc_credits_cost}
-       *Instance Usage:* #{overall_usage}
-       *Instance Hours:* #{usage_breakdown}
+       *Compute Instance Usage:* #{overall_usage}
+       *Compute Instance Hours:* #{usage_breakdown}
     "
 
     send_slack_message(msg)
@@ -91,11 +100,8 @@ class AwsProject < Project
     
     start_date = Date.parse(self.start_date)
     start_date = start_date > Date.today.beginning_of_month ? start_date : Date.today.beginning_of_month
-    costs_so_far = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today - 2, "MONTHLY")).results_by_time
-    total_costs = 0.0
-    costs_so_far.each do |month|
-      total_costs += month.total["UnblendedCost"][:amount].to_f
-    end
+    costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today - 2, "MONTHLY")).results_by_time[0]
+    total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
     total_costs = (total_costs * 10 * 1.25).ceil
     
     logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%").select {|log| log.compute_node?}
@@ -111,11 +117,12 @@ class AwsProject < Project
     remaining_budget = self.budget.to_i - total_costs
     remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
     enough = Date.today + remaining_days + 2 >= (Date.today << 1).beginning_of_month
+    date_range = "1 - #{(Date.today - 2).day} #{Date::MONTHNAMES[Date.today.month]}"
     
     msg = "
     :calendar: \t\t\t\t Weekly Report \t\t\t\t :calendar:
     *Monthly Budget:* #{self.budget} compute units
-    *Total Costs for 1 - #{(Date.today - 2).day} #{Date::MONTHNAMES[Date.today.month]}:* #{total_costs} compute units
+    *Total Costs for #{date_range}:* #{total_costs} compute units
     *Remaining Monthly Budget:* #{remaining_budget} compute units
     
     *Current Usage*
@@ -203,15 +210,15 @@ class AwsProject < Project
   end
 
   def get_usage_hours_by_instance_type(date=(Date.today - 2))
-    usage_by_instance_type = @explorer.get_cost_and_usage(instance_type_usage_query(date))
+    usage_by_instance_type = @explorer.get_cost_and_usage_with_resources(compute_instance_type_usage_query(date))
     usage_by_instance_type
-    usage_breakdown = " "
+    usage_breakdown = "\n\t\t\t\t"
 
     usage_by_instance_type.results_by_time[0].groups.each do |group|
-      usage_breakdown << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t\t\t\t\t\t\t"
+      usage_breakdown << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t\t"
     end
 
-    usage_breakdown == "" ? "None" : usage_breakdown
+    usage_breakdown == "\n\t\t\t\t" ? "None" : usage_breakdown
   end
 
   def record_instance_logs
@@ -240,7 +247,7 @@ class AwsProject < Project
   end
 
   def each_instance_usage_data
-    puts @explorer.get_cost_and_usage_with_resources(each_instance_usage_query)
+    @explorer.get_cost_and_usage_with_resources(each_instance_usage_query)
   end
 
   def get_instance_usage_data(instance_id)
@@ -271,10 +278,20 @@ class AwsProject < Project
       granularity: "DAILY",
       metrics: ["USAGE_QUANTITY"],
       filter: {
-        dimensions: {
-          key: "USAGE_TYPE_GROUP",
-          values: ["EC2: Running Hours"]
-        }
+        and: [
+          {
+            dimensions: {
+              key: "USAGE_TYPE_GROUP",
+              values: ["EC2: Running Hours"]
+            }
+          },
+          {
+            cost_categories: {
+              key: "compute",
+              values: ["compute"]
+            }
+          }
+        ]
       },
       group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
     }
@@ -283,8 +300,8 @@ class AwsProject < Project
   def cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
     {
       time_period: {
-        start: start_date.to_s,
-        end: end_date.to_s
+        start: start_date,
+        end: end_date
       },
       granularity: granularity,
       metrics: ["UNBLENDED_COST"],
@@ -304,12 +321,12 @@ class AwsProject < Project
               values: ["Amazon Elastic Compute Cloud - Compute"]
             }
           },
-          # {
-          #    cost_categories: {
-          #      key: "compute",
-          #      values: ["ec2"]
-          #    }
-          # }
+          {
+            cost_categories: {
+              key: "compute",
+              values: ["compute"]
+            }
+          }
         ]
       },
     }
@@ -389,21 +406,69 @@ class AwsProject < Project
     }
   end
 
-  def each_instance_cost_query
+  def each_instance_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
     {
       time_period: {
-        start: (Date.today - 2).to_s,
-        end: (Date.today - 1).to_s
+        start: start_date.to_s,
+        end: (start_date + 1).to_s
       },
-      granularity: "DAILY",
+      granularity: granularity,
       metrics: ["UNBLENDED_COST"],
       filter: {
-        dimensions: {
-          key: "SERVICE",
-          values: ["Amazon Elastic Compute Cloud - Compute"]
-        }
+        and: [
+          {
+            dimensions: {
+              key: "SERVICE",
+              values: ["Amazon Elastic Compute Cloud - Compute"]
+            }
+          },
+          {
+            not: {
+              dimensions: {
+                key: "RESOURCE_ID",
+                values: excluded_instances
+              }
+            }
+          },
+        ]
       },
       group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
+    }
+  end
+
+  def compute_instance_type_usage_query(date)
+    {
+      time_period: {
+        start: date.to_s,
+        end: (date + 1).to_s
+      },
+      granularity: "DAILY",
+      metrics: ["USAGE_QUANTITY"],
+      filter: {
+        and: [
+          { 
+            dimensions: {
+              key: "SERVICE",
+              values: ["Amazon Elastic Compute Cloud - Compute"]
+            }
+          },
+          {
+            dimensions: {
+              key: "USAGE_TYPE_GROUP",
+              values: ["EC2: Running Hours"]
+            }
+          },
+          {
+            not: {
+              dimensions: {
+                key: "RESOURCE_ID",
+                values: excluded_instances
+              }
+            }
+          },
+        ]
+      },
+      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
     }
   end
 
@@ -428,10 +493,18 @@ class AwsProject < Project
               key: "USAGE_TYPE_GROUP",
               values: ["EC2: Running Hours"]
             }
-          }
+          },
+          {
+            not: {
+              dimensions: {
+                key: "RESOURCE_ID",
+                values: excluded_instances
+              }
+            }
+          },
         ]
       },
-      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
+      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
     }
   end
 
