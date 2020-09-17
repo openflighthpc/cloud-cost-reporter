@@ -37,7 +37,7 @@ class AwsProject < Project
   end
 
   def get_cost_and_usage(date=(Date.today - 2))
-    compute_cost_log = self.cost_logs.where(date: date.to_s, scope: "compute").first
+    compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
     
     # only make query if don't already have data in logs
     if compute_cost_log == nil
@@ -57,7 +57,7 @@ class AwsProject < Project
       )
     end
 
-    total_cost_log = self.cost_logs.where(date: date.to_s, scope: "total").first
+    total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     
     # only make query if don't already have data in logs
     if total_cost_log == nil
