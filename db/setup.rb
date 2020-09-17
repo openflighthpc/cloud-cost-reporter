@@ -15,6 +15,7 @@ db.execute "CREATE TABLE IF NOT EXISTS projects(
   host TEXT,
   budget INTEGER,
   start_date TEXT,
+  end_date TEXT,
   slack_channel TEXT,
   metadata TEXT
 )"

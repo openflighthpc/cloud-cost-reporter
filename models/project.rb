@@ -11,6 +11,7 @@ class Project < ActiveRecord::Base
   validates :slack_channel, presence: true
   validates :start_date, presence: true
   validate :start_date_valid, on: [:update, :create]
+  validate :end_date_valid, on: [:update, :create], if: -> { end_date != nil }
   validates :host,
     presence: true,
     inclusion: {
@@ -24,6 +25,11 @@ class Project < ActiveRecord::Base
 
   def azure?
     self.host.downcase == "azure"
+  end
+
+  def active?
+    return true if self.end_date == nil
+    Date.parse(self.end_date) > Date.today
   end
 
   def get_cost_and_usage
@@ -61,9 +67,14 @@ class Project < ActiveRecord::Base
   private
 
   def start_date_valid
-    valid = Date.parse(self.start_date) rescue false
-    if !valid
-      errors.add(:start_date, "Must be a valid date")
-    end
-  end 
+    errors.add(:start_date, "Must be a valid date") if !date_valid?(self.start_date)
+  end
+
+  def end_date_valid
+    errors.add(:end_date, "Must be a valid date") if !date_valid?(self.end_date)
+  end
+
+  def date_valid?(date)
+    Date.parse(date) rescue false
+  end
 end
