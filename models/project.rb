@@ -3,6 +3,7 @@ require 'active_record'
 ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
 
 class Project < ActiveRecord::Base
+  FIXED_MONTHLY_CU_COST = 5000
   belongs_to :customer
   has_many :cost_logs
   has_many :instance_logs
@@ -51,12 +52,8 @@ class Project < ActiveRecord::Base
   def weekly_report
   end
 
-  def fixed_monthly_cu_cost
-    5000
-  end
-
   def fixed_daily_cu_cost
-    fixed_monthly_cu_cost / Time.now.end_of_month.day
+    FIXED_MONTHLY_CU_COST / Time.now.end_of_month.day
   end
 
   def attributes

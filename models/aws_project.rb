@@ -24,7 +24,7 @@ class AwsProject < Project
   end
 
   def excluded_instances
-    @exluded_instances ||= self.instance_logs.select {|i| !i.compute_node?}.map {|i| i.instance_id}.uniq
+    @excluded_instances ||= self.instance_logs.select {|i| !i.compute_node?}.map {|i| i.instance_id}.uniq
   end
 
   def add_sdk_objects
@@ -40,7 +40,7 @@ class AwsProject < Project
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
     
     # only make query if don't already have data in logs
-    if compute_cost_log == nil
+    if !compute_cost_log
       compute_instance_costs = @explorer.get_cost_and_usage_with_resources(each_instance_cost_query(date)).results_by_time[0][:groups]
       compute_cost = 0
       compute_instance_costs.each do |instance|
@@ -60,7 +60,7 @@ class AwsProject < Project
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     
     # only make query if don't already have data in logs
-    if total_cost_log == nil
+    if !total_cost_log
       daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
       total_cost_log = CostLog.create(
         project_id: self.id,
