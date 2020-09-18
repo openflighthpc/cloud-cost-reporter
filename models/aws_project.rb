@@ -2,9 +2,9 @@ require 'aws-sdk-costexplorer'
 require 'aws-sdk-cloudwatch'
 require 'aws-sdk-ec2'
 require 'aws-sdk-pricing'
-load './models/project.rb'
-load './models/cost_log.rb'
-load './models/instance_log.rb'
+require_relative 'project'
+require_relative 'cost_log'
+require_relative 'instance_log'
 
 class AwsProject < Project
   @@prices = {}

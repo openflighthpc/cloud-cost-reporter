@@ -1,4 +1,4 @@
-load './models/project.rb'
+require_relative 'project'
 
 class AzureProject < Project
   after_initialize :construct_metadata
@@ -47,6 +47,7 @@ class AzureProject < Project
         project_id: id,
         cost: daily_cost,
         currency: 'GBP',
+        scope: 'total',
         date: date.to_s,
         timestamp: Time.now.to_s
       )

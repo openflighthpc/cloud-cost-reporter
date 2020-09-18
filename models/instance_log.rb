@@ -1,5 +1,5 @@
 require 'active_record'
-load './models/instance_mapping.rb'
+require_relative 'instance_mapping'
 
 ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
 
