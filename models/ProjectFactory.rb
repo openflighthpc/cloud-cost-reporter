@@ -3,7 +3,11 @@ load './models/azure_project.rb'
 
 class ProjectFactory
   def all_projects_as_type
-    Project.all.map {|project| as_type(project) }
+    Project.all.map { |project| as_type(project) }
+  end
+
+  def all_active_projects_as_type
+    Project.active.map { |project| as_type(project) }
   end
 
   def as_type(project)
