@@ -1,4 +1,4 @@
-load './models/project_factory.rb'
+require_relative './models/project_factory'
 
 def add_or_update_project(action=nil)
   factory = ProjectFactory.new
@@ -42,6 +42,7 @@ def update_attributes(project)
       "That is not a valid attribute for this project. Please try again."
     end
   end
+
   if attribute == "metadata"
     metadata = JSON.parse(project.metadata)
     print "Key name: "
@@ -55,11 +56,19 @@ def update_attributes(project)
     value = gets.chomp
     project.write_attribute(attribute.to_sym, value)
   end
-  success = project.save!
-  if !success
-    puts project.errors
-    return update_attributes(project)
+  valid = project.valid?
+  while !valid
+    project.errors.messages.each do |k, v|
+      v.each do |error|
+        puts "#{k} #{v}"
+      end
+      puts "Please enter new #{k}"
+      value = gets.chomp
+      project.write_attribute(k, value)
+    end
+    valid = project.valid?
   end
+  project.save!
   puts "#{attribute} updated successfully"
   puts "Would you like to update another field (y/n)?"
   action = gets.chomp.downcase
@@ -86,7 +95,7 @@ def add_project
     print "Access Key Id: "
     metadata["access_key_ident"] = gets.chomp
     print "Secret Access Key: "
-    metadata["key"] = gets.chomp 
+    metadata["key"] = gets.chomp
   else
     print "Tenant Id: "
     metadata["tenant_id"] = gets.chomp

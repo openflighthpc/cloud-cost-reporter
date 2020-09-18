@@ -12,9 +12,11 @@ class Project < ActiveRecord::Base
 
   validates :name, presence: true, uniqueness: true
   validates :slack_channel, presence: true
+  validates :budget, numericality: true
   validates :start_date, presence: true
   validate :start_date_valid, on: [:update, :create]
   validate :end_date_valid, on: [:update, :create], if: -> { end_date != nil }
+  validate :end_date_after_start, on: [:update, :create], if: -> { end_date != nil }
   validates :host,
     presence: true,
     inclusion: {
@@ -70,6 +72,14 @@ class Project < ActiveRecord::Base
 
   def end_date_valid
     errors.add(:end_date, "Must be a valid date") if !date_valid?(self.end_date)
+  end
+
+  def end_date_after_start # fix
+    starting = date_valid?(self.start_date)
+    ending = date_valid?(self.end_date)
+    if starting && ending && ending <= starting    
+      errors.add(:end_date, "Must be after start date")
+    end
   end
 
   def date_valid?(date)
