@@ -97,13 +97,11 @@ class AzureProject < Project
     )
 
     if response.success?
-      db = SQLite3::Database.open 'db/cost_tracker.sqlite3'
       body = JSON.parse(response.body)
       @metadata['bearer_token'] = body['access_token']
       @metadata['bearer_expiry'] = body['expires_on']
-      db.execute "UPDATE projects
-                  SET metadata = '#{@metadata.to_json}'
-                  WHERE id = #{id}"
+      self.metadata = @metadata.to_json
+      self.save!
     else
       puts "Error obtaining new authorization token for project #{name}. Error code #{response.code}."
     end
