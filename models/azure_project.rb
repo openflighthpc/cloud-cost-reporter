@@ -78,7 +78,7 @@ class AzureProject < Project
     if response.success?
       return response['value']
     else
-      raise RuntimeError, "Error querying Azure API. Error code #{response.code}."
+      puts "Error querying Azure API for project #{name}. Error code #{response.code}."
     end
   end
 
@@ -105,7 +105,7 @@ class AzureProject < Project
                   SET metadata = '#{@metadata.to_json}'
                   WHERE id = #{id}"
     else
-      raise RuntimeError, "Error obtaining new authorization token. Error code #{response.code}."
+      puts "Error obtaining new authorization token for project #{name}. Error code #{response.code}."
     end
   end
 
