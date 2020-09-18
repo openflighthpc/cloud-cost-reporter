@@ -1,5 +1,7 @@
-load './models/aws_project.rb'
-load './models/azure_project.rb'
+require_relative 'aws_project'
+require_relative 'azure_project'
+require_relative 'cost_log'
+require_relative 'instance_log'
 
 class ProjectFactory
   def all_projects_as_type
@@ -11,6 +13,6 @@ class ProjectFactory
   end
 
   def as_type(project)
-    project.aws? ? AwsProject.new(project.attributes) : AzureProject.new(project.attributes)
+    project.aws? ? AwsProject.find(project.id) : AzureProject.find(project.id)
   end
 end
