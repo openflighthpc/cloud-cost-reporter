@@ -85,9 +85,7 @@ class AwsProject < Project
     end
     daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
 
-
     remaining_budget = self.budget.to_i - total_costs
-    remaining_days = 
     
     msg = "
     :calendar: \t\t\t\t Weekly Report \t\t\t\t :calendar:
