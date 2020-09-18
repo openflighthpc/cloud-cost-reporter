@@ -18,7 +18,10 @@ class Project < ActiveRecord::Base
       in: %w(aws azure),
       message: "%{value} is not a valid host"
     }
-  scope :active, -> { where("end_date > ? OR end_date IS NULL", Date.today) }
+  scope :active, -> { 
+    where("end_date > ? OR end_date IS NULL", Date.today).where(
+          "start_date <= ?", Date.today)
+  }
   
   def aws?
     self.host.downcase == "aws"
