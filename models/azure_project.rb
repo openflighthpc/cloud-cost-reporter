@@ -37,7 +37,11 @@ class AzureProject < Project
     cost_log = cost_logs.find_by(date: date.to_s)
 
     if !cost_log
-      daily_cost = api_query_daily_cost(date)
+      response = api_query_daily_cost(date)
+      # the query has multiple values that sound useful (effectivePrice, cost, 
+      # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
+      # Cost Analysis page (under 'Actual Cost') for the period selected.
+      daily_cost = response.map { |c| c['properties']['cost'] }.reduce(:+)
 
       cost_log = CostLog.create(
         project_id: id,
@@ -72,11 +76,7 @@ class AzureProject < Project
     )
 
     if response.success?
-      charges = response['value']
-      # the query has multiple values that sound useful (effectivePrice, cost, 
-      # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
-      # Cost Analysis page (under 'Actual Cost') for the period selected.
-      return charges.map { |c| c['properties']['cost'] }.reduce(:+)
+      return response['value']
     else
       raise RuntimeError, "Error querying Azure API. Error code #{response.code}."
     end
