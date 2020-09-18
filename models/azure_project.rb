@@ -111,7 +111,7 @@ class AzureProject < Project
       @metadata['bearer_token'] = body['access_token']
       @metadata['bearer_expiry'] = body['expires_on']
       self.metadata = @metadata.to_json
-      self.save!
+      self.save
     else
       puts "Error obtaining new authorization token for project #{name}. Error code #{response.code}."
     end
