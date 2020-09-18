@@ -1,4 +1,3 @@
-require 'httparty'
 load './models/project.rb'
 
 class AzureProject < Project
