@@ -117,10 +117,10 @@ class AwsProject < Project
     puts "_" * 50
   end
 
-  def weekly_report(date=Date.today, slack=true)
+  def weekly_report(date=Date.today, slack=true, rerun=false)
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
-    if report == nil
+    if report == nil || rerun
       if date != Date.today
         puts "No weekly report for project #{self.name} on #{date}." 
         puts "As the contained data is time specific, can only retrieve saved reports or generate one for today.\n\n"
@@ -137,7 +137,7 @@ class AwsProject < Project
         puts ""
         return
       end
-      record_instance_logs
+      record_instance_logs(rerun)
       get_latest_prices
       usage = get_overall_usage(date, true)
 
@@ -236,7 +236,7 @@ class AwsProject < Project
   end
 
   def get_overall_usage(date, customer_facing=false)
-    logs = self.instance_logs.where('timestamp LIKE ?', "%#{date}%").select {|log| log.compute_node?}
+    logs = self.instance_logs.where('timestamp LIKE ? AND status IS NOT ?', "%#{date}%", "terminated").select {|log| log.compute_node?}
 
     instance_counts = {}
     logs.each do |log|
@@ -255,11 +255,12 @@ class AwsProject < Project
 
     overall_usage = ""
     instance_counts.each do |type|
-      overall_usage << " #{type[1]["total"]} "
+      overall_usage << "#{type[1]["total"]} "
       overall_usage << "x #{type[0]}"
       overall_usage << "(#{type[1]["stopped"]} stopped)" if type[1]["stopped"] != nil
+      overall_usage << " "
     end
-    overall_usage == "" ? "None recorded" : overall_usage
+    overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
   def get_usage_hours_by_instance_type(date=(Date.today - 2))
@@ -274,8 +275,10 @@ class AwsProject < Project
     usage_breakdown == "\n\t\t\t\t" ? "None" : usage_breakdown
   end
 
-  def record_instance_logs
-    if self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%").count == 0
+  def record_instance_logs(rerun=false)
+    today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
+    today_logs.delete_all if rerun
+    if today_logs.count == 0 || rerun
       @instances_checker.describe_instances.reservations.each do |reservation|
         reservation.instances.each do |instance|
           named = ""
@@ -284,7 +287,7 @@ class AwsProject < Project
               named = tag.value
             end
           end
-
+          
           InstanceLog.create(
             instance_id: instance.instance_id,
             project_id: self.id,
@@ -293,7 +296,7 @@ class AwsProject < Project
             status: instance.state.name,
             host: "AWS",
             timestamp: Time.now.to_s
-            )
+          )
         end
       end
     end

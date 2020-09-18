@@ -47,13 +47,13 @@ class Project < ActiveRecord::Base
   def get_forecasts
   end
 
-  def record_instance_logs
+  def record_instance_logs(rerun=false)
   end
 
   def record_cost_log
   end
 
-  def weekly_report(date=Date.today, slack=true)
+  def weekly_report(date=Date.today, slack=true, rerun=false)
   end
 
   def fixed_daily_cu_cost

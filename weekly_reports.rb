@@ -4,9 +4,9 @@ require 'date'
 require 'sqlite3'
 require_relative './models/project_factory'
 
-def all_projects(date, slack)
+def all_projects(date, slack, rerun)
   ProjectFactory.new().all_projects_as_type.each do |project|
-    project.weekly_report(date, slack)
+    project.weekly_report(date, slack, rerun)
   end
 end
 
@@ -21,6 +21,11 @@ if ARGV[1] && ARGV[1] != "latest"
   date = valid
 end
 
+rerun = false
+if ARGV[3] && ARGV[3] == "rerun"
+  rerun = true
+end
+
 slack = true
 if ARGV[2] && ARGV[2] == "text"
   slack = false
@@ -33,7 +38,7 @@ if ARGV[0] && ARGV[0] != "all"
     return
   end
   project = ProjectFactory.new().as_type(project)
-  project.weekly_report(date, slack)
+  project.weekly_report(date, slack, rerun)
 else
-  all_projects(date, slack)
+  all_projects(date, slack, rerun)
 end
