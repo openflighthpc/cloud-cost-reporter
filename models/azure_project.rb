@@ -50,17 +50,17 @@ class AzureProject < Project
         date: date.to_s,
         timestamp: Time.now.to_s
       )
-
-      msg = "
-        :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
-        *GBP:* #{cost_log.cost.to_f.ceil(2)}
-        *Compute Units (Flat):* #{cost_log.compute_cost}
-        *Compute Units (Risk):* #{cost_log.risk_cost}
-        *FC Credits:* #{cost_log.fc_credits_cost}
-      "
-
-      send_slack_message(msg)
     end
+
+    msg = "
+      :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
+      *GBP:* #{cost_log.cost.to_f.ceil(2)}
+      *Compute Units (Flat):* #{cost_log.compute_cost}
+      *Compute Units (Risk):* #{cost_log.risk_cost}
+      *FC Credits:* #{cost_log.fc_credits_cost}
+    "
+
+    send_slack_message(msg)
   end
 
   def api_query_daily_cost(date)
