@@ -6,8 +6,8 @@ require_relative './models/project_factory'
 
 def all_projects(date, slack)
   ProjectFactory.new().all_projects_as_type.each do |project|
-    project.get_cost_and_usage(date, slack)
     project.record_instance_logs
+    project.get_cost_and_usage(date, slack)
     if ARGV.include?("forecasts")
       project.get_forecasts
     end
@@ -22,7 +22,7 @@ end
 
 date = Date.today - 2
 
-if ARGV[1] && ARGV[1] != "today"
+if ARGV[1] && ARGV[1] != "latest"
   valid = Date.parse(ARGV[1]) rescue false
   if !valid
     puts "Provided date invalid"

@@ -25,6 +25,8 @@ class AwsProject < Project
 
   def excluded_instances
     @excluded_instances ||= self.instance_logs.select {|i| !i.compute_node?}.map {|i| i.instance_id}.uniq
+    # if given an empty array the relevant queries will fail, so instead provide a dummy instance.
+    @excluded_instances.length == 0 ? ["abc"] : @excluded_instances
   end
 
   def add_sdk_objects
@@ -37,6 +39,12 @@ class AwsProject < Project
   end
 
   def get_cost_and_usage(date=(Date.today - 2), slack=true)
+    start_date = Date.parse(self.start_date)
+    if date < start_date
+      puts "Given date is before the project start date"
+      return
+    end
+
     compute_cost_log = self.cost_logs.where(date: date.to_s).first
 
     # only make query if don't already have data in logs
@@ -190,7 +198,7 @@ class AwsProject < Project
       msg = report.content
     end
     send_slack_message(msg) if slack
-    puts msg
+    puts (msg.gsub(":calendar:", "").gsub("*", "").gsub(":awooga:", ""))
     puts '_' * 50
   end
 

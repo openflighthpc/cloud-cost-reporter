@@ -12,7 +12,7 @@ end
 
 date = Date.today
 
-if ARGV[1] && ARGV[1] != "today"
+if ARGV[1] && ARGV[1] != "latest"
   valid = Date.parse(ARGV[1]) rescue false
   if !valid
     puts "Provided date invalid"

@@ -34,16 +34,16 @@ class AzureProject < Project
       update_bearer_token
     end
 
-    cost_log = cost_logs.find_by(date: date.to_s)
+    total_cost_log = cost_logs.find_by(date: date.to_s)
 
-    if !cost_log
+    if !total_cost_log
       response = api_query_daily_cost(date)
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
       # Cost Analysis page (under 'Actual Cost') for the period selected.
       daily_cost = response.map { |c| c['properties']['cost'] }.reduce(:+)
 
-      cost_log = CostLog.create(
+      total_cost_log = CostLog.create(
         project_id: id,
         cost: daily_cost,
         currency: 'GBP',
@@ -53,15 +53,23 @@ class AzureProject < Project
       )
     end
 
-    msg = "
-      :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
-      *GBP:* #{cost_log.cost.to_f.ceil(2)}
-      *Compute Units (Flat):* #{cost_log.compute_cost}
-      *Compute Units (Risk):* #{cost_log.risk_cost}
-      *FC Credits:* #{cost_log.fc_credits_cost}
-    "
-
-    send_slack_message(msg)
+    if slack
+      msg = "
+        :moneybag: Usage for #{date.to_s} :moneybag:
+        *GBP:* #{total_cost_log.cost.to_f.ceil(2)}
+        *Compute Units (Flat):* #{total_cost_log.compute_cost}
+        *Compute Units (Risk):* #{total_cost_log.risk_cost}
+        *FC Credits:* #{total_cost_log.fc_credits_cost}
+      "
+      send_slack_message(msg)
+    end
+    puts "\nProject: #{self.name}"
+    puts "Usage for #{date.to_s}"
+    puts "Total Cost (GBP): #{total_cost_log.cost.to_f.ceil(2)}"
+    puts "Total Compute Units (Flat): #{total_cost_log.compute_cost}"
+    puts "Total Compute Units (Risk): #{total_cost_log.risk_cost}"
+    puts "\nFC Credits: #{total_cost_log.fc_credits_cost}"
+    puts "_" * 50
   end
 
   def api_query_daily_cost(date)
