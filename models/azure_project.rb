@@ -80,7 +80,7 @@ class AzureProject < Project
     overall_usage=""
 
     api_query_vm_view.each do |vm|
-      name = vm['id'].match(/virtualMachines\/(.*)\/providers/)[1]
+      name = vm['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
       status = case vm['properties']['availabilityState']
                when 'Unavailable'
                  ' (powered off)'
@@ -125,7 +125,7 @@ class AzureProject < Project
   end
 
   def api_query_vm_view
-    uri = "https://management.azure.com/subscriptions/#{subscription_id}/resourceGroups/jacks-resource-group/providers/Microsoft.ResourceHealth/availabilityStatuses"
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.ResourceHealth/availabilityStatuses"
     query = {
       'api-version': '2020-05-01',
       '$filter': "resourceType eq 'Microsoft.Compute/virtualMachines'"
