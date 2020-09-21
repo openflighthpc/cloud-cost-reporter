@@ -10,7 +10,7 @@ def all_projects(date, slack, rerun)
   end
 end
 
-date = Date.today
+date = Date.today - 2
 
 if ARGV[1] && ARGV[1] != "latest"
   valid = Date.parse(ARGV[1]) rescue false

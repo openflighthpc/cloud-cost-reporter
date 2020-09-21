@@ -117,26 +117,10 @@ class AwsProject < Project
     puts "_" * 50
   end
 
-  def weekly_report(date=Date.today, slack=true, rerun=false)
+  def weekly_report(date=Date.today - 2, slack=true, rerun=false)
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
-      if date != Date.today
-        puts "No weekly report for project #{self.name} on #{date}." 
-        puts "As the contained data is time specific, can only retrieve saved reports or generate one for today.\n\n"
-        reports = self.weekly_report_logs
-        if reports.length > 0
-          puts "Weekly reports exist for project #{self.name} on the following dates: " 
-          self.weekly_report_logs.each do |report|
-            puts report.date
-          end
-        else
-          puts "No prior weekly reports exist for #{self.name}."
-        end
-        puts "_" * 50
-        puts ""
-        return
-      end
       record_instance_logs(rerun)
       get_latest_prices
       usage = get_overall_usage(date, true)
@@ -146,12 +130,12 @@ class AwsProject < Project
         puts "Given date is before the project start date"
         return
       end
-      start_date = start_date > Date.today.beginning_of_month ? start_date : Date.today.beginning_of_month
-      costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today - 2, "MONTHLY")).results_by_time[0]
+      start_date = start_date > date.beginning_of_month ? start_date : date.beginning_of_month
+      costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, date, "MONTHLY")).results_by_time[0]
       total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
       total_costs = (total_costs * 10 * 1.25).ceil
 
-      logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%").select {|log| log.compute_node?}
+      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").select {|log| log.compute_node?}
       future_costs = 0.0
       logs.each do |log|
         if log.status == "running"
@@ -163,8 +147,8 @@ class AwsProject < Project
 
       remaining_budget = self.budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      enough = Date.today + remaining_days + 2 >= (Date.today << 1).beginning_of_month
-      date_range = "1 - #{(Date.today - 2).day} #{Date::MONTHNAMES[Date.today.month]}"
+      enough = date + remaining_days + 2 >= (date << 1).beginning_of_month
+      date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
 
       msg = "
       :calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:
@@ -172,7 +156,7 @@ class AwsProject < Project
       *Total Costs for #{date_range}:* #{total_costs} compute units
       *Remaining Monthly Budget:* #{remaining_budget} compute units
 
-      *Current Usage*
+      *Current Usage (as of #{logs.last ? logs.last.timestamp.strftime('%H:%M %Y-%m-%d') : Time.now.strftime('%H:%M %Y-%m-%d')})*
       Currently, the cluster compute nodes are:
       `#{usage}`
 
@@ -185,7 +169,7 @@ class AwsProject < Project
       "
 
       if remaining_budget < 0
-        excess = (total_future_cu * Date.today.end_of_month.day - (Date.today - 2).day)
+        excess = (total_future_cu * date.end_of_month.day - (date).day)
         msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* 
       compute units at the end of the month."
       else
@@ -193,7 +177,7 @@ class AwsProject < Project
       As tracking is *2 days behind*, the budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
       end
 
-      WeeklyReportLog.create(project_id: self.id, content: msg, date: Date.today, timestamp: Time.now)
+      WeeklyReportLog.create(project_id: self.id, content: msg, date: date, timestamp: Time.now)
     else
       msg = report.content
     end
@@ -203,13 +187,13 @@ class AwsProject < Project
   end
 
   def get_latest_prices
-    instances = InstanceLog.where(host: "AWS").where('timestamp LIKE ?', "%#{Date.today}%")
-    instances.each do |instance|
+    instance_types = InstanceLog.where(host: "aws").group(:instance_type).pluck(:instance_type)
+    instance_types.each do |instance_type|
       if !@@prices.has_key?(self.region)
         @@prices[region] = {}
       end
-      if !@@prices[self.region].has_key?(instance.instance_type)
-        @@prices[self.region][instance.instance_type] = get_cost_per_hour(instance.instance_type)
+      if !@@prices[self.region].has_key?(instance_type)
+        @@prices[self.region][instance_type] = get_cost_per_hour(instance_type)
       end
     end
   end

@@ -74,7 +74,7 @@ class Project < ActiveRecord::Base
     errors.add(:end_date, "Must be a valid date") if !date_valid?(self.end_date)
   end
 
-  def end_date_after_start # fix
+  def end_date_after_start
     starting = date_valid?(self.start_date)
     ending = date_valid?(self.end_date)
     if starting && ending && ending <= starting    

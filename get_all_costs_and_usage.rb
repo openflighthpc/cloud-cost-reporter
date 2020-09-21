@@ -50,7 +50,6 @@ if ARGV[0] && ARGV[0] != "all"
   project = ProjectFactory.new().as_type(project)
   project.record_instance_logs
   project.get_cost_and_usage(date, slack)
-  
 else
   all_projects(date, slack, rerun)
 end
