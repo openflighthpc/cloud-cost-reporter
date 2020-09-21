@@ -1,4 +1,5 @@
 require_relative 'project'
+require 'pp'
 
 class AzureProject < Project
   after_initialize :construct_metadata
@@ -28,6 +29,8 @@ class AzureProject < Project
   end
 
   def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
+    cost_log = cost_logs.find_by(date: date.to_s)
+
     # refresh authorization token if necessary
     # tokens last for 3600 seconds (one hour)
     if Time.now.to_i > bearer_expiry.to_i
@@ -58,6 +61,7 @@ class AzureProject < Project
       end
     end
 
+<<<<<<< HEAD
     msg = [
         "#{"*Cached report*" if cached}",
         ":moneybag: Usage for #{date.to_s} :moneybag:",
@@ -71,6 +75,34 @@ class AzureProject < Project
     puts "\nProject: #{self.name}\n"
     puts msg.gsub(":moneybag:", "").gsub("*", "")
     puts "_" * 50
+=======
+    response = api_query_vm_view
+    overall_usage=""
+
+    api_query_vm_view.each do |vm|
+      name = vm['id'].match(/virtualMachines\/(.*)\/providers/)[1]
+      status = case vm['properties']['availabilityState']
+               when 'Unavailable'
+                 ' (powered off)'
+               when 'Available'
+                 ''
+               else
+                 ' (status unknown)'
+               end
+      overall_usage << "\n\t\t\t\t#{name} #{status}"
+    end
+
+    msg = "
+      :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
+      *GBP:* #{cost_log.cost.to_f.ceil(2)}
+      *Compute Units (Flat):* #{cost_log.compute_cost}
+      *Compute Units (Risk):* #{cost_log.risk_cost}
+      *FC Credits:* #{cost_log.fc_credits_cost}
+      *Compute Instance Usage:* #{overall_usage}
+    "
+
+    send_slack_message(msg)
+>>>>>>> 48c224c... Add output section for VM status
   end
 
   def api_query_daily_cost(date)
@@ -88,7 +120,26 @@ class AzureProject < Project
     if response.success?
       return response['value']
     else
-      puts "Error querying Azure API for project #{name}. Error code #{response.code}."
+      puts "Error querying daily cost Azure API for project #{name}. Error code #{response.code}."
+    end
+  end
+
+  def api_query_vm_view
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/resourceGroups/jacks-resource-group/providers/Microsoft.ResourceHealth/availabilityStatuses"
+    query = {
+      'api-version': '2020-05-01',
+      '$filter': "resourceType eq 'Microsoft.Compute/virtualMachines'"
+    }
+    response = HTTParty.get(
+      uri,
+      query: query,
+      headers: { 'Authorization': "Bearer #{bearer_token}" }
+    )
+
+    if response.success?
+      return response['value']
+    else
+      puts "Error querying node status Azure API for project #{name}. Error code #{response.code}."
     end
   end
 
