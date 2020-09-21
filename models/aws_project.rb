@@ -31,8 +31,8 @@ class AwsProject < Project
     @metadata = JSON.parse(self.metadata)
     Aws.config.update({region: "us-east-1"})
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
-    @watcher = Aws::CloudWatch::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: 'eu-west-2')
-    @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: 'eu-west-2')
+    @watcher = Aws::CloudWatch::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: self.region)
+    @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: self.region)
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
@@ -132,7 +132,7 @@ class AwsProject < Project
       total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
       total_costs = (total_costs * 10 * 1.25).ceil
 
-      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").select {|log| log.compute_node?}
+      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
       future_costs = 0.0
       logs.each do |log|
         if log.status == "running"
@@ -189,7 +189,7 @@ class AwsProject < Project
   end
 
   def get_latest_prices
-    instance_types = InstanceLog.where(host: "AWS").group(:instance_type).pluck(:instance_type)
+    instance_types = self.instance_logs.where(host: "AWS").group(:instance_type).pluck(:instance_type)
     instance_types.each do |instance_type|
       if !@@prices.has_key?(self.region)
         @@prices[region] = {}
@@ -222,7 +222,7 @@ class AwsProject < Project
   end
 
   def get_overall_usage(date, customer_facing=false)
-    logs = self.instance_logs.where('timestamp LIKE ? AND status IS NOT ?', "%#{date}%", "terminated").select(&:compute_node?)
+    logs = self.instance_logs.where('timestamp LIKE ? AND status IS NOT ?', "%#{date}%", "terminated").where(compute: 1)
 
     instance_counts = {}
     logs.each do |log|
@@ -250,7 +250,7 @@ class AwsProject < Project
   end
 
   def get_usage_hours_by_instance_type(date=(Date.today - 2))
-    usage_by_instance_type = @explorer.get_cost_and_usage_with_resources(compute_instance_type_usage_query(date))
+    usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
     usage_by_instance_type
     usage_breakdown = "\n\t\t\t\t"
 
@@ -265,11 +265,10 @@ class AwsProject < Project
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
     if today_logs.count == 0
-      @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
+      @instances_checker.describe_instances(project_instances_query.reservations.each do |reservation|
         reservation.instances.each do |instance|
           named = ""
           compute = false
-          project = nil
           instance.tags.each do |tag|
             if tag.key == "Name"
               named = tag.value
@@ -278,18 +277,17 @@ class AwsProject < Project
               compute = tag.value == "true"
             end
           end
-          if project
-            InstanceLog.create(
-              instance_id: instance.instance_id,
-              project_id: self.id,
-              instance_name: named,
-              instance_type: instance.instance_type,
-              compute: compute,
-              status: instance.state.name,
-              host: "AWS",
-              timestamp: Time.now.to_s
-            )
-          end
+
+          InstanceLog.create(
+            instance_id: instance.instance_id,
+            project_id: self.id,
+            instance_name: named,
+            instance_type: instance.instance_type,
+            compute: compute,
+            status: instance.state.name,
+            host: "AWS",
+            timestamp: Time.now.to_s
+          )
         end
       end
     end
@@ -313,10 +311,10 @@ class AwsProject < Project
   end
 
   def get_ssd_usage
-    puts @explorer.get_cost_and_usage(ssd_usage_query)
+    @explorer.get_cost_and_usage(ssd_usage_query)
   end
 
-  private
+    private
 
   def instance_type_usage_query(date) 
     {
@@ -335,11 +333,12 @@ class AwsProject < Project
             }
           },
           {
-            cost_categories: {
+            tags: {
               key: "compute",
-              values: ["compute"]
+              values: ["true"]
             }
-          }
+          },
+          project_filter
         ]
       },
       group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
@@ -371,11 +370,12 @@ class AwsProject < Project
             }
           },
           {
-            cost_categories: {
+            tags: {
               key: "compute",
-              values: ["compute"]
+              values: ["true"]
             }
-          }
+          },
+          project_filter
         ]
       },
     }
@@ -390,12 +390,17 @@ class AwsProject < Project
       granularity: granularity,
       metrics: ["UNBLENDED_COST"],
       filter: {
-        not: {
-          dimensions: {
-            key: "RECORD_TYPE",
-            values: ["CREDIT"]
-          }
-        }
+        and:[ 
+          {
+            not: {
+              dimensions: {
+                key: "RECORD_TYPE",
+                values: ["CREDIT"]
+              }
+            }
+          },
+          project_filter
+        ]
       },
     }
   end
@@ -485,7 +490,7 @@ class AwsProject < Project
     }
   end
 
-  def compute_instance_type_usage_query(date)
+  def per_instance_compute_instance_type_usage_query(date)
     {
       time_period: {
         start: date.to_s,
@@ -515,6 +520,41 @@ class AwsProject < Project
               }
             }
           },
+        ]
+      },
+      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
+    }
+  end
+
+  def compute_instance_type_usage_query(date)
+    {
+      time_period: {
+        start: date.to_s,
+        end: (date + 1).to_s
+      },
+      granularity: "DAILY",
+      metrics: ["USAGE_QUANTITY"],
+      filter: {
+        and: [
+          { 
+            dimensions: {
+              key: "SERVICE",
+              values: ["Amazon Elastic Compute Cloud - Compute"]
+            }
+          },
+          {
+            dimensions: {
+              key: "USAGE_TYPE_GROUP",
+              values: ["EC2: Running Hours"]
+            }
+          },
+          project_filter,
+          {
+            tags: {
+              key: "compute",
+              values: ["true"]
+            }
+          }
         ]
       },
       group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
@@ -751,13 +791,42 @@ class AwsProject < Project
   end
 
   def project_instances_query
-    {
-      filters: [
-        {
-          name: "tag:project", 
-          values: [self.name], 
-        }, 
-      ], 
-    }
+    if filter_level == "tag"
+      {
+        filters: [
+          {
+            name: "tag:project", 
+            values: [self.name], 
+          }, 
+        ], 
+      }
+    else
+      {
+        filters: [
+          {
+            name: "owner-id",
+            values: [self.account_id]
+          }
+        ]
+      }
+    end
+  end
+
+  def project_filter
+    if filter_level == "tag"
+      {
+        tags: {
+          key: "project",
+          values: [self.name]
+        }
+      }
+    else
+      {
+        dimensions: {
+          key: "LINKED_ACCOUNT",
+          values: [self.account_id]
+        }
+      }
+    end
   end
 end
