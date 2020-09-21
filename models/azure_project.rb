@@ -79,7 +79,7 @@ class AzureProject < Project
     response = api_query_vm_view
     overall_usage=""
 
-    api_query_vm_view.each do |vm|
+    response.each do |vm|
       name = vm['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
       status = case vm['properties']['availabilityState']
                when 'Unavailable'
