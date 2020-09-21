@@ -6,7 +6,7 @@ require_relative './models/project_factory'
 
 def all_projects(date, slack, rerun)
   ProjectFactory.new().all_projects_as_type.each do |project|
-    project.record_instance_logs
+    project.record_instance_logs(rerun)
     project.get_cost_and_usage(date, slack, rerun)
     if ARGV.include?("forecasts")
       project.get_forecasts

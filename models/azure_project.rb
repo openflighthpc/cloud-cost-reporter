@@ -58,24 +58,18 @@ class AzureProject < Project
       end
     end
 
-    if slack
-      msg = "
-        #{"*Cached report*" if cached}
-        :moneybag: Usage for #{date.to_s} :moneybag:
-        *GBP:* #{total_cost_log.cost.to_f.ceil(2)}
-        *Compute Units (Flat):* #{total_cost_log.compute_cost}
-        *Compute Units (Risk):* #{total_cost_log.risk_cost}
-        *FC Credits:* #{total_cost_log.fc_credits_cost}
-      "
-      send_slack_message(msg)
-    end
-    puts "\n Cached Report" if cached
+    msg = [
+        "#{"*Cached report*" if cached}",
+        ":moneybag: Usage for #{date.to_s} :moneybag:",
+        "*GBP:* #{total_cost_log.cost.to_f.ceil(2)}",
+        "*Compute Units (Flat):* #{total_cost_log.compute_cost}",
+        "*Compute Units (Risk):* #{total_cost_log.risk_cost}",
+        "*FC Credits:* #{total_cost_log.fc_credits_cost}"
+      ].join("\n") + "\n"
+    send_slack_message(msg) if slack
+
     puts "\nProject: #{self.name}"
-    puts "Usage for #{date.to_s}"
-    puts "Total Cost (GBP): #{total_cost_log.cost.to_f.ceil(2)}"
-    puts "Total Compute Units (Flat): #{total_cost_log.compute_cost}"
-    puts "Total Compute Units (Risk): #{total_cost_log.risk_cost}"
-    puts "\nFC Credits: #{total_cost_log.fc_credits_cost}"
+    puts msg.gsub(":moneybag:", "").gsub("*", "")
     puts "_" * 50
   end
 

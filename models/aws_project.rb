@@ -24,7 +24,7 @@ class AwsProject < Project
   def excluded_instances
     @excluded_instances ||= self.instance_logs.select {|i| !i.compute_node?}.map {|i| i.instance_id}.uniq
     # if given an empty array the relevant queries will fail, so instead provide a dummy instance.
-    @excluded_instances.length == 0 ? ["abc"] : @excluded_instances
+    !@excluded_instances.any? ? ["abc"] : @excluded_instances
   end
 
   def add_sdk_objects
@@ -92,41 +92,25 @@ class AwsProject < Project
     usage_breakdown = get_usage_hours_by_instance_type(date)
     date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
-    if slack
-      msg = "
-      
-      #{"*Cached report*" if cached}
-      :moneybag: Usage for #{(date).to_s} :moneybag:
-      *Compute Costs (USD):* #{compute_cost_log.cost.to_f.ceil(2)}
-      *Compute Units (Flat):* #{compute_cost_log.compute_cost}
-      *Compute Units (Risk):* #{compute_cost_log.risk_cost}
+    msg = [
+      "#{date_warning if date_warning}",
+      "#{"*Cached report*" if cached}",
+      ":moneybag: Usage for #{(date).to_s} :moneybag:",
+      "*Compute Costs (USD):* #{compute_cost_log.cost.to_f.ceil(2)}",
+      "*Compute Units (Flat):* #{compute_cost_log.compute_cost}",
+      "*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n",
+      "*Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}",
+      "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
+      "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}\n",
+      "*FC Credits:* #{total_cost_log.fc_credits_cost}",
+      "*Compute Instance Usage:* #{overall_usage.strip}",
+      "*Compute Instance Hours:* #{usage_breakdown}"
+    ].join("\n") + "\n"
 
-      *Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}
-      *Total Compute Units (Flat):* #{total_cost_log.compute_cost}
-      *Total Compute Units (Risk):* #{total_cost_log.risk_cost}
+    send_slack_message(msg) if slack
 
-      *FC Credits:* #{total_cost_log.fc_credits_cost}
-      *Compute Instance Usage:* #{overall_usage}
-      *Compute Instance Hours:* #{usage_breakdown}
-      "
-
-      send_slack_message(msg)
-    end
-
-    puts date_warning if date_warning
-    puts "\n Cached Report" if cached
     puts "\nProject: #{self.name}"
-    puts "Usage for #{date.to_s}"
-    puts "Compute Costs (USD): #{compute_cost_log.cost.to_f.ceil(2)}"
-    puts "Compute Units (Flat): #{compute_cost_log.compute_cost}"
-    puts "Compute Units (Risk): #{compute_cost_log.risk_cost}"
-    puts "\nTotal Costs (USD): #{total_cost_log.cost.to_f.ceil(2)}"
-    puts "Total Compute Units (Flat): #{total_cost_log.compute_cost}"
-    puts "Total Compute Units (Risk): #{total_cost_log.risk_cost}"
-    puts "\nFC Credits: #{total_cost_log.fc_credits_cost}"
-    puts "Compute Instance Usage: #{overall_usage}"
-    puts "Compute Instance Hours:"
-    puts "#{usage_breakdown.strip.gsub("\t", "")}\n"
+    puts msg.gsub(":moneybag:", "").gsub("*", "").gsub("\t", "")
     puts "_" * 50
   end
 
@@ -166,36 +150,32 @@ class AwsProject < Project
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
       date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
-      msg = "
-      #{date_warning if date_warning}
-      :calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:
-      *Monthly Budget:* #{self.budget} compute units
-      *Total Costs for #{date_range}:* #{total_costs} compute units
-      *Remaining Monthly Budget:* #{remaining_budget} compute units
-
-      *Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*
-      Currently, the cluster compute nodes are:
-      `#{usage}`
-
-      The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.
-      Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day.
-
-      The total estimated requirement is therefore *#{total_future_cu}* compute units per day.
-
-      *Predicted Usage*
-      "
+      msg = [
+      "#{date_warning if date_warning}",
+      ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
+      "*Monthly Budget:* #{self.budget} compute units",
+      "*Total Costs for #{date_range}:* #{total_costs} compute units",
+      "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
+      "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
+      "Currently, the cluster compute nodes are:",
+      "`#{usage}`\n",
+      "The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.",
+      "Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day.\n",
+      "The total estimated requirement is therefore *#{total_future_cu}* compute units per day.\n",
+      "*Predicted Usage*"
+      ]
 
       if remaining_budget < 0
         excess = (total_future_cu * date.end_of_month.day - (date).day)
-        msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* 
-      compute units at the end of the month."
+        msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
       else
-        msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days.
-      #{time_lag > 0 ? "As tracking is *#{time_lag} days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+        msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days."
+        msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
       end
+      msg = msg.join("\n") + "\n"
 
       if report && rerun
-        report.update_attributes(content: msg, timestamp: Time.now)
+        report.update(content: msg, timestamp: Time.now)
         report.save!
       else
         WeeklyReportLog.create(project_id: self.id, content: msg, date: date, timestamp: Time.now)
@@ -242,7 +222,7 @@ class AwsProject < Project
   end
 
   def get_overall_usage(date, customer_facing=false)
-    logs = self.instance_logs.where('timestamp LIKE ? AND status IS NOT ?', "%#{date}%", "terminated").select {|log| log.compute_node?}
+    logs = self.instance_logs.where('timestamp LIKE ? AND status IS NOT ?', "%#{date}%", "terminated").select(&:compute_node?)
 
     instance_counts = {}
     logs.each do |log|
@@ -284,7 +264,7 @@ class AwsProject < Project
   def record_instance_logs(rerun=false)
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
-    if today_logs.count == 0 || rerun
+    if today_logs.count == 0
       @instances_checker.describe_instances.reservations.each do |reservation|
         reservation.instances.each do |instance|
           named = ""

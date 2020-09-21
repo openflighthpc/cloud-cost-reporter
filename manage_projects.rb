@@ -3,7 +3,7 @@ require_relative './models/project_factory'
 def add_or_update_project(action=nil)
   factory = ProjectFactory.new
   if action == nil
-    print "Add or update project? "
+    print "Add or update project (add/update)? "
     action = gets.chomp.downcase
   end
   if action == "update"
@@ -33,7 +33,7 @@ end
 def update_attributes(project)
   valid = false
   attribute = nil
-  while valid == false
+  while !valid
     puts "What would you like to update (for security related attributes please select metadata)? "
     attribute = gets.chomp
     if project.respond_to?(attribute.downcase)
@@ -59,9 +59,7 @@ def update_attributes(project)
   valid = project.valid?
   while !valid
     project.errors.messages.each do |k, v|
-      v.each do |error|
-        puts "#{k} #{v}"
-      end
+      puts "#{k} #{v.join("; ")}"
       puts "Please enter new #{k}"
       value = gets.chomp
       project.write_attribute(k, value)
@@ -82,8 +80,8 @@ def add_project
   print "Project name: "
   attributes[:name] = gets.chomp
   print "Host (aws or azure): "
-  attributes[:host] = gets.chomp
-  print "Start date: "
+  attributes[:host] = gets.chomp.downcase
+  print "Start date (YYYY-MM-DD): "
   attributes[:start_date] = gets.chomp
   print "Budget (c.u.): "
   attributes[:budget] = gets.chomp
@@ -112,9 +110,7 @@ def add_project
   valid = project.valid?
   while !valid
     project.errors.messages.each do |k, v|
-      v.each do |error|
-        puts "#{k} #{v}"
-      end
+      puts "#{k} #{v.join("; ")}"
       puts "Please enter new #{k}"
       value = gets.chomp
       project.write_attribute(k, value)
