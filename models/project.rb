@@ -1,5 +1,7 @@
 require 'active_record'
 require_relative 'weekly_report_log'
+require_relative 'cost_log'
+require_relative 'instance_log'
 
 ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
 
@@ -41,7 +43,7 @@ class Project < ActiveRecord::Base
     Date.parse(self.end_date) > Date.today
   end
 
-  def get_cost_and_usage(date=Date.today - 2, slack=true)
+  def get_cost_and_usage(date=Date.today - 2, slack=true, rerun=false)
   end
 
   def get_forecasts

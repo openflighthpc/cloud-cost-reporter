@@ -27,7 +27,7 @@ class AzureProject < Project
     @metadata['bearer_expiry']
   end
 
-  def get_cost_and_usage(date=Date.today-2, slack=true)
+  def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
     # refresh authorization token if necessary
     # tokens last for 3600 seconds (one hour)
     if Time.now.to_i > bearer_expiry.to_i
@@ -35,26 +35,32 @@ class AzureProject < Project
     end
 
     total_cost_log = cost_logs.find_by(date: date.to_s)
+    cached = total_cost_log && !rerun
 
-    if !total_cost_log
+    if !total_cost_log || rerun
       response = api_query_daily_cost(date)
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
       # Cost Analysis page (under 'Actual Cost') for the period selected.
       daily_cost = response.map { |c| c['properties']['cost'] }.reduce(:+)
 
-      total_cost_log = CostLog.create(
-        project_id: id,
-        cost: daily_cost,
-        currency: 'GBP',
-        scope: 'total',
-        date: date.to_s,
-        timestamp: Time.now.to_s
-      )
+      if rerun && total_cost_log
+        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
+      else
+        total_cost_log = CostLog.create(
+          project_id: id,
+          cost: daily_cost,
+          currency: 'GBP',
+          scope: 'total',
+          date: date.to_s,
+          timestamp: Time.now.to_s
+        )
+      end
     end
 
     if slack
       msg = "
+        #{"*Cached report*" if cached}
         :moneybag: Usage for #{date.to_s} :moneybag:
         *GBP:* #{total_cost_log.cost.to_f.ceil(2)}
         *Compute Units (Flat):* #{total_cost_log.compute_cost}
@@ -63,6 +69,7 @@ class AzureProject < Project
       "
       send_slack_message(msg)
     end
+    puts "\n Cached Report" if cached
     puts "\nProject: #{self.name}"
     puts "Usage for #{date.to_s}"
     puts "Total Cost (GBP): #{total_cost_log.cost.to_f.ceil(2)}"
