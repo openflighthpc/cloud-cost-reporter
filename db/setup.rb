@@ -27,6 +27,7 @@ db.execute "CREATE TABLE IF NOT EXISTS instance_logs(
   instance_name TEXT,
   instance_id TEXT,
   instance_type TEXT,
+  compute INTEGER,
   status TEXT,
   timestamp TEXT
 )"

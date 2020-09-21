@@ -22,7 +22,7 @@ class AwsProject < Project
   end
 
   def excluded_instances
-    @excluded_instances ||= self.instance_logs.select {|i| !i.compute_node?}.map {|i| i.instance_id}.uniq
+    @excluded_instances ||= self.instance_logs.select {|i| !i.compute?}.map {|i| i.instance_id}.uniq
     # if given an empty array the relevant queries will fail, so instead provide a dummy instance.
     !@excluded_instances.any? ? ["abc"] : @excluded_instances
   end
@@ -47,7 +47,7 @@ class AwsProject < Project
 
     # only make query if don't already have data in logs or asked to recalculate
     if !compute_cost_log || rerun
-      compute_instance_costs = @explorer.get_cost_and_usage_with_resources(each_instance_cost_query(date)).results_by_time[0][:groups]
+      compute_instance_costs = @explorer.get_cost_and_usage(cost_query(date)).results_by_time[0][:groups]
       compute_cost = 0
       compute_instance_costs.each do |instance|
         compute_cost += instance[:metrics]["UnblendedCost"][:amount].to_f
@@ -265,24 +265,31 @@ class AwsProject < Project
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
     if today_logs.count == 0
-      @instances_checker.describe_instances.reservations.each do |reservation|
+      @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
         reservation.instances.each do |instance|
           named = ""
+          compute = false
+          project = nil
           instance.tags.each do |tag|
             if tag.key == "Name"
               named = tag.value
             end
+            if tag.key == "compute"
+              compute = tag.value == "true"
+            end
           end
-
-          InstanceLog.create(
-            instance_id: instance.instance_id,
-            project_id: self.id,
-            instance_name: named,
-            instance_type: instance.instance_type,
-            status: instance.state.name,
-            host: "AWS",
-            timestamp: Time.now.to_s
-          )
+          if project
+            InstanceLog.create(
+              instance_id: instance.instance_id,
+              project_id: self.id,
+              instance_name: named,
+              instance_type: instance.instance_type,
+              compute: compute,
+              status: instance.state.name,
+              host: "AWS",
+              timestamp: Time.now.to_s
+            )
+          end
         end
       end
     end
@@ -342,8 +349,8 @@ class AwsProject < Project
   def cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
     {
       time_period: {
-        start: start_date,
-        end: end_date
+        start: start_date.to_s,
+        end: end_date.to_s
       },
       granularity: granularity,
       metrics: ["UNBLENDED_COST"],
@@ -740,6 +747,17 @@ class AwsProject < Project
      ], 
      format_version: "aws_v1",
      max_results: 1
+    }
+  end
+
+  def project_instances_query
+    {
+      filters: [
+        {
+          name: "tag:project", 
+          values: [self.name], 
+        }, 
+      ], 
     }
   end
 end
