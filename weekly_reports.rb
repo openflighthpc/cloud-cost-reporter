@@ -21,14 +21,14 @@ if ARGV[1] && ARGV[1] != "latest"
   date = valid
 end
 
-rerun = false
-if ARGV[3] && ARGV[3] == "rerun"
-  rerun = true
-end
-
 slack = true
 if ARGV[2] && ARGV[2] == "text"
   slack = false
+end
+
+rerun = false
+if ARGV[3] && ARGV[3] == "rerun"
+  rerun = true
 end
 
 if ARGV[0] && ARGV[0] != "all"  

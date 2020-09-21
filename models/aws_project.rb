@@ -160,17 +160,20 @@ class AwsProject < Project
 
       remaining_budget = self.budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      enough = date + remaining_days + 2 >= (date << 1).beginning_of_month
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : Time.now
+      time_lag = (instances_date.to_date - date).to_i
+      enough = date + remaining_days + time_lag >= (date << 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
-      instances_date = logs.last ? Time.parse(logs.first.timestamp).strftime('%H:%M %Y-%m-%d') : Time.now.strftime('%H:%M %Y-%m-%d')
+      date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
       msg = "
+      #{date_warning if date_warning}
       :calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:
       *Monthly Budget:* #{self.budget} compute units
       *Total Costs for #{date_range}:* #{total_costs} compute units
       *Remaining Monthly Budget:* #{remaining_budget} compute units
 
-      *Current Usage (as of #{instances_date})*
+      *Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*
       Currently, the cluster compute nodes are:
       `#{usage}`
 
@@ -188,10 +191,15 @@ class AwsProject < Project
       compute units at the end of the month."
       else
         msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days.
-      As tracking is *2 days behind*, the budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      #{time_lag > 0 ? "As tracking is *#{time_lag} days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
       end
 
-      WeeklyReportLog.create(project_id: self.id, content: msg, date: date, timestamp: Time.now)
+      if report && rerun
+        report.update_attributes(content: msg, timestamp: Time.now)
+        report.save!
+      else
+        WeeklyReportLog.create(project_id: self.id, content: msg, date: date, timestamp: Time.now)
+      end
     else
       msg = "\t\t\t\t\t*Cached Report*\n" << report.content
     end
@@ -285,7 +293,7 @@ class AwsProject < Project
               named = tag.value
             end
           end
-          
+
           InstanceLog.create(
             instance_id: instance.instance_id,
             project_id: self.id,
