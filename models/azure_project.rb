@@ -45,7 +45,11 @@ class AzureProject < Project
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
       # Cost Analysis page (under 'Actual Cost') for the period selected.
-      daily_cost = response.map { |c| c['properties']['cost'] }.reduce(:+)
+      daily_cost = begin
+                     response.map { |c| c['properties']['cost'] }.reduce(:+)
+                   rescue NoMethodError
+                     0.0
+                   end
 
       if rerun && total_cost_log
         total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
