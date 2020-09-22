@@ -94,6 +94,10 @@ def add_project
     metadata["access_key_ident"] = gets.chomp
     print "Secret Access Key: "
     metadata["key"] = gets.chomp
+    print "Account Id number: "
+    metadata["account_id"] = gets.chomp
+    print "Filtering level (tag/account): "
+    metadata["filter_level"] = gets.chomp
   else
     print "Tenant Id: "
     metadata["tenant_id"] = gets.chomp

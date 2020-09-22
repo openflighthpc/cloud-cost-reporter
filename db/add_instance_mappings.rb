@@ -1,6 +1,9 @@
 require 'sqlite3'
 load './models/instance_mapping.rb'
 
+InstanceMapping.create(instance_type: "t3.medium", customer_facing_name: "General (Small)")
+InstanceMapping.create(instance_type: "t3.xlarge", customer_facing_name: "General (Medium)")
+InstanceMapping.create(instance_type: "t3.2xlarge", customer_facing_name: "General (Large)")
 InstanceMapping.create(instance_type: "c5.large", customer_facing_name: "Compute (Small)")
 InstanceMapping.create(instance_type: "c5.xlarge", customer_facing_name: "Compute (Medium)")
 InstanceMapping.create(instance_type: "c5.2xlarge", customer_facing_name: "Compute (Large)")
