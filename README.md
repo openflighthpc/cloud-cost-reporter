@@ -33,11 +33,11 @@ tbd
 
 ## Slack setup
 
-The application includes the option to send results to slack, specifying a specific channel for each project. To use this function, a slack bot (https://slack.com/apps/A0F7YS25R-bots) must be created. The bot's API Token should the be used to set an environment variable:
+The application includes the option to send results to slack, specifying a specific channel for each project. To use this function, a slack bot (https://slack.com/apps/A0F7YS25R-bots) must be created. The bot's API Token should then be used to set an environment variable:
 
 `API_KEY=yourtoken ruby -e 'p ENV["API_KEY"]'`
 
-This bot should be invited to each project's chosen slack channel.
+This bot must be invited to each project's chosen slack channel.
 
 ## Adding projects
 
@@ -45,16 +45,16 @@ A `Project` object should be created for each project you wish to track. These c
 
 # Generating reports
 
-The application includes functionality for generating both daily (AWS and Azure) and weekly (AWS) reports of cloud usage and cost data. The obtained data is saved in the database and unless specified, queries where an existing report exists will use stored data instead of making fresh sdk/api calls.
+The application includes functionality for generating both daily (AWS and Azure) and weekly (AWS) reports of cloud usage and cost data. The obtained data is saved in the database and, unless specified, queries where an existing report exists will use stored data instead of making fresh sdk/api calls.
 
-Daily reports can be run using `ruby get_all_costs_and_usage.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for 2 days ago (as cost & usage data takes 2 days to update). The results will be printed to the terminal and posted to the chosen slack channel(s).
+Daily reports can be generated using `ruby get_all_costs_and_usage.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for 2 days ago (as cost & usage data takes 2 days to update). The results will be printed to the terminal and posted to the chosen slack channel(s).
 
-Weekly reports can similarly be run using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far, including estimating costs for the rest of the month. The results will be printed to the terminal and posted to the chosen slack channel(s).
+Weekly reports can similarly be generated using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far, including estimating costs for the rest of the month. The results will be printed to the terminal and posted to the chosen slack channel(s). Weekly reports use the specified date (2 days ago by default) for historical cost data, but will use today's instance and pricing data for estimating future costs.
 
 Both of these files also take up to 4 arguments:
 
 1: project name or 'all'\
-2: a specific date or 'latest'\
+2: a specific date or 'latest'. All dates must be in the format YYYY-MM-DD\
 3 (optional & unordered): 'slack' or 'text'. If text no message will be sent to slack\
 4 (optional & unordered): 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
 
