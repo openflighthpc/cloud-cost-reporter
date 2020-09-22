@@ -10,8 +10,12 @@ def all_projects(date, slack, rerun)
     project.get_cost_and_usage(date, slack, rerun)
     #project.each_instance_usage_data
     #project.get_instance_usage_data("i-062dd1030e63f9cff")
+<<<<<<< HEAD
     #project.get_instance_cpu_utilization("i-0b2c0cb3524d62615")
     #project.get_data_out(date)
+=======
+    #project.get_data_out
+>>>>>>> remove CPU query we don't want
     #project.get_ssd_usage
     #puts project.get_cost_per_hour('r5.2xlarge')
   end
