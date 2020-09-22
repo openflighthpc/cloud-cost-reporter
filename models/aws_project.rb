@@ -742,6 +742,7 @@ class AwsProject < Project
               ]
             }
           },
+          project_filter,
           {
             not: {
               dimensions: {
