@@ -58,6 +58,12 @@ class Project < ActiveRecord::Base
   def weekly_report(date=Date.today, slack=true, rerun=false)
   end
 
+  def get_data_out
+  end
+
+  def get_ssd_usage
+  end
+
   def fixed_daily_cu_cost
     FIXED_MONTHLY_CU_COST / Time.now.end_of_month.day
   end

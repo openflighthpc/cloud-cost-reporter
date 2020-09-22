@@ -315,7 +315,7 @@ class AwsProject < Project
   end
 
   def get_data_out
-    @explorer.get_cost_and_usage(data_out_query)
+    puts @explorer.get_cost_and_usage(data_out_query)
   end
 
   def get_ssd_usage
@@ -698,10 +698,10 @@ class AwsProject < Project
   def data_out_query
     {
       time_period: {
-        start: (Date.today - 2).to_s,
+        start: (Date.today - 20).to_s,
         end: (Date.today - 1).to_s
       },
-      granularity: "DAILY",
+      granularity: "MONTHLY",
       metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
       filter: {
         and: [
@@ -711,7 +711,8 @@ class AwsProject < Project
             values: 
               [
                 "EC2: Data Transfer - Internet (Out)",
-                "EC2: Data Transfer - CloudFront (Out)"
+                "EC2: Data Transfer - CloudFront (Out)",
+                "EC2: Data Transfer - Region to Region (Out)"
               ]
             }
           },
@@ -731,10 +732,10 @@ class AwsProject < Project
   def ssd_usage_query
     {
       time_period: {
-        start: (Date.today - 2).to_s,
+        start: (Date.today - 20).to_s,
         end: (Date.today - 1).to_s
       },
-      granularity: "DAILY",
+      granularity: "MONTHLY",
       metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
       filter: {
         and: [

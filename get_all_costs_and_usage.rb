@@ -4,6 +4,7 @@ require 'date'
 require 'sqlite3'
 require_relative './models/project_factory'
 
+<<<<<<< HEAD
 def all_projects(date, slack, rerun)
   ProjectFactory.new().all_projects_as_type.each do |project|
     project.record_instance_logs(rerun)
