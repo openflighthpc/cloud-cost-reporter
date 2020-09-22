@@ -21,6 +21,14 @@ class AwsProject < Project
     @metadata['region']
   end
 
+  def account_id 
+    @metadata['account_id']
+  end
+
+  def filter_level
+    @metadata['filter_level']
+  end
+
   def excluded_instances
     @excluded_instances ||= self.instance_logs.select {|i| !i.compute?}.map {|i| i.instance_id}.uniq
     # if given an empty array the relevant queries will fail, so instead provide a dummy instance.
@@ -265,7 +273,7 @@ class AwsProject < Project
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
     if today_logs.count == 0
-      @instances_checker.describe_instances(project_instances_query.reservations.each do |reservation|
+      @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
         reservation.instances.each do |instance|
           named = ""
           compute = false
