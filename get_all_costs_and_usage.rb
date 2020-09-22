@@ -21,30 +21,27 @@ def all_projects(date, slack, rerun)
 end
 
 date = Date.today - 2
-slack = true
 project = nil
-rerun = false
+rerun = ARGV.include?("rerun")
+slack = !ARGV.include?("text")
 
-ARGV.each do |arg|
-  if %w[latest, all, slack].include?(arg)
-    next
-  elsif arg == "text"
-    slack = false
-  elsif arg == "rerun"
-    rerun = true
-  else
-    valid = Date.parse(arg) rescue false
-    if valid 
-      date = valid
-    elsif !project
-      project = Project.find_by(name: arg)
-    end
+if ARGV[1] && ARGV[1] != "latest"
+  valid = Date.parse(ARGV[1]) rescue false
+  if !valid
+    puts "Provided date invalid"
+    return
   end
+  date = valid
 end
     
-if project
+if ARGV[0] && ARGV[0] != "all"  
+  project = Project.find_by(name: ARGV[0])
+  if project == nil
+    puts "Project with that name not found"
+    return
+  end
   project = ProjectFactory.new().as_type(project)
-  project.record_instance_logs(rerun)
+  project.record_instance_logs
   project.get_cost_and_usage(date, slack, rerun)
 else
   all_projects(date, slack, rerun)

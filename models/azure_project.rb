@@ -68,7 +68,7 @@ class AzureProject < Project
       ].join("\n") + "\n"
     send_slack_message(msg) if slack
 
-    puts "\nProject: #{self.name}"
+    puts "\nProject: #{self.name}\n"
     puts msg.gsub(":moneybag:", "").gsub("*", "")
     puts "_" * 50
   end
