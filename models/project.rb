@@ -1,4 +1,7 @@
 require 'active_record'
+require_relative 'weekly_report_log'
+require_relative 'cost_log'
+require_relative 'instance_log'
 
 ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
 
@@ -7,12 +10,15 @@ class Project < ActiveRecord::Base
   belongs_to :customer
   has_many :cost_logs
   has_many :instance_logs
+  has_many :weekly_report_logs
 
   validates :name, presence: true, uniqueness: true
   validates :slack_channel, presence: true
+  validates :budget, numericality: true
   validates :start_date, presence: true
   validate :start_date_valid, on: [:update, :create]
   validate :end_date_valid, on: [:update, :create], if: -> { end_date != nil }
+  validate :end_date_after_start, on: [:update, :create], if: -> { end_date != nil }
   validates :host,
     presence: true,
     inclusion: {
@@ -37,36 +43,23 @@ class Project < ActiveRecord::Base
     Date.parse(self.end_date) > Date.today
   end
 
-  def get_cost_and_usage
+  def get_cost_and_usage(date=Date.today - 2, slack=true, rerun=false)
   end
 
   def get_forecasts
   end
 
-  def record_instance_logs
+  def record_instance_logs(rerun=false)
   end
 
   def record_cost_log
   end
 
-  def weekly_report
+  def weekly_report(date=Date.today, slack=true, rerun=false)
   end
 
   def fixed_daily_cu_cost
     FIXED_MONTHLY_CU_COST / Time.now.end_of_month.day
-  end
-
-  def attributes
-    {
-      name: self.name,
-      id: self.id,
-      client_id: self.client_id,
-      host: self.host,
-      slack_channel: self.slack_channel,
-      budget: self.budget,
-      start_date: self.start_date,
-      metadata: self.metadata,
-    }
   end
 
   def send_slack_message(msg)
@@ -81,6 +74,14 @@ class Project < ActiveRecord::Base
 
   def end_date_valid
     errors.add(:end_date, "Must be a valid date") if !date_valid?(self.end_date)
+  end
+
+  def end_date_after_start
+    starting = date_valid?(self.start_date)
+    ending = date_valid?(self.end_date)
+    if starting && ending && ending <= starting    
+      errors.add(:end_date, "Must be after start date")
+    end
   end
 
   def date_valid?(date)

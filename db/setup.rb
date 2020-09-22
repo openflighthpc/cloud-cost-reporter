@@ -41,6 +41,14 @@ db.execute "CREATE TABLE IF NOT EXISTS cost_logs(
   timestamp TEXT
 )"
 
+db.execute "CREATE TABLE IF NOT EXISTS weekly_report_logs(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER,
+  content TEXT,
+  date TEXT,
+  timestamp TEXT
+)"
+
 db.execute "CREATE TABLE IF NOT EXISTS instance_mappings(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   instance_type TEXT,

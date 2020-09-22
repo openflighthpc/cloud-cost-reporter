@@ -3,8 +3,6 @@ require 'aws-sdk-cloudwatch'
 require 'aws-sdk-ec2'
 require 'aws-sdk-pricing'
 require_relative 'project'
-require_relative 'cost_log'
-require_relative 'instance_log'
 
 class AwsProject < Project
   @@prices = {}
@@ -25,6 +23,8 @@ class AwsProject < Project
 
   def excluded_instances
     @excluded_instances ||= self.instance_logs.select {|i| !i.compute_node?}.map {|i| i.instance_id}.uniq
+    # if given an empty array the relevant queries will fail, so instead provide a dummy instance.
+    !@excluded_instances.any? ? ["abc"] : @excluded_instances
   end
 
   def add_sdk_objects
@@ -36,127 +36,166 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def get_cost_and_usage(date=(Date.today - 2))
+  def get_cost_and_usage(date=(Date.today - 2), slack=true, rerun=false)
+    start_date = Date.parse(self.start_date)
+    if date < start_date
+      puts "Given date is before the project start date"
+      return
+    end
+
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
-    
-    # only make query if don't already have data in logs
-    if !compute_cost_log
+
+    # only make query if don't already have data in logs or asked to recalculate
+    if !compute_cost_log || rerun
       compute_instance_costs = @explorer.get_cost_and_usage_with_resources(each_instance_cost_query(date)).results_by_time[0][:groups]
       compute_cost = 0
       compute_instance_costs.each do |instance|
         compute_cost += instance[:metrics]["UnblendedCost"][:amount].to_f
       end
       
-      compute_cost_log = CostLog.create(
-        project_id: self.id,
-        cost: compute_cost,
-        currency: "USD",
-        date: date.to_s,
-        scope: "compute",
-        timestamp: Time.now.to_s
-      )
+      if rerun && compute_cost_log
+        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
+        compute_cost_log.save!
+      else
+        compute_cost_log = CostLog.create(
+          project_id: self.id,
+          cost: compute_cost,
+          currency: "USD",
+          date: date.to_s,
+          scope: "compute",
+          timestamp: Time.now.to_s
+        )
+      end
     end
 
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
-    
-    # only make query if don't already have data in logs
-    if !total_cost_log
+    cached = total_cost_log && !rerun
+    # only make query if don't already have data in logs or asked to recalculate
+    if !total_cost_log || rerun
       daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
-      total_cost_log = CostLog.create(
-        project_id: self.id,
-        cost: daily_cost,
-        currency: "USD",
-        date: date.to_s,
-        scope: "total",
-        timestamp: Time.now.to_s
-      )
+      if total_cost_log && rerun
+        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
+        total_cost_log.save!
+      else
+        total_cost_log = CostLog.create(
+          project_id: self.id,
+          cost: daily_cost,
+          currency: "USD",
+          date: date.to_s,
+          scope: "total",
+          timestamp: Time.now.to_s
+        )
+      end
     end
 
     overall_usage = get_overall_usage(date)
     usage_breakdown = get_usage_hours_by_instance_type(date)
+    date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
-    msg = "
-      :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
-       *Compute Costs(USD):* #{compute_cost_log.cost.to_f.ceil(2)}
-       *Compute Units (Flat):* #{compute_cost_log.compute_cost}
-       *Compute Units (Risk):* #{compute_cost_log.risk_cost}
+    msg = [
+      "#{date_warning if date_warning}",
+      "#{"*Cached report*" if cached}",
+      ":moneybag: Usage for #{(date).to_s} :moneybag:",
+      "*Compute Costs (USD):* #{compute_cost_log.cost.to_f.ceil(2)}",
+      "*Compute Units (Flat):* #{compute_cost_log.compute_cost}",
+      "*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n",
+      "*Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}",
+      "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
+      "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}\n",
+      "*FC Credits:* #{total_cost_log.fc_credits_cost}",
+      "*Compute Instance Usage:* #{overall_usage.strip}",
+      "*Compute Instance Hours:* #{usage_breakdown}"
+    ].join("\n") + "\n"
 
-       *Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}
-       *Total Compute Units (Flat):* #{total_cost_log.compute_cost}
-       *Total Compute Units (Risk):* #{total_cost_log.risk_cost}
+    send_slack_message(msg) if slack
 
-       *FC Credits:* #{total_cost_log.fc_credits_cost}
-       *Compute Instance Usage:* #{overall_usage}
-       *Compute Instance Hours:* #{usage_breakdown}
-    "
-
-    send_slack_message(msg)
+    puts "\nProject: #{self.name}"
+    puts msg.gsub(":moneybag:", "").gsub("*", "").gsub("\t", "")
+    puts "_" * 50
   end
 
-  def weekly_report
-    record_instance_logs
-    get_latest_prices
-    usage = get_overall_usage(Date.today, true)
-    
-    start_date = Date.parse(self.start_date)
-    start_date = start_date > Date.today.beginning_of_month ? start_date : Date.today.beginning_of_month
-    costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, Date.today - 2, "MONTHLY")).results_by_time[0]
-    total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
-    total_costs = (total_costs * 10 * 1.25).ceil
-    
-    logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%").select {|log| log.compute_node?}
-    future_costs = 0.0
-    logs.each do |log|
-      if log.status == "running"
-        future_costs += @@prices[self.region][log.instance_type]
+  def weekly_report(date=Date.today - 2, slack=true, rerun=false)
+    report = self.weekly_report_logs.find_by(date: date)
+    msg = ""
+    if report == nil || rerun
+      record_instance_logs(rerun)
+      get_latest_prices
+      usage = get_overall_usage(Date.today, true)
+
+      start_date = Date.parse(self.start_date)
+      if date < start_date
+        puts "Given date is before the project start date"
+        return
       end
-    end
-    daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
-    total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
-    
-    remaining_budget = self.budget.to_i - total_costs
-    remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-    enough = Date.today + remaining_days + 2 >= (Date.today << 1).beginning_of_month
-    date_range = "1 - #{(Date.today - 2).day} #{Date::MONTHNAMES[Date.today.month]}"
-    
-    msg = "
-    :calendar: \t\t\t\t Weekly Report \t\t\t\t :calendar:
-    *Monthly Budget:* #{self.budget} compute units
-    *Total Costs for #{date_range}:* #{total_costs} compute units
-    *Remaining Monthly Budget:* #{remaining_budget} compute units
-    
-    *Current Usage*
-    Currently, the cluster compute nodes are:
-    `#{usage}`
+      start_date = start_date > date.beginning_of_month ? start_date : date.beginning_of_month
+      costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, date, "MONTHLY")).results_by_time[0]
+      total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
+      total_costs = (total_costs * 10 * 1.25).ceil
 
-    The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.
-    Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day. 
+      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").select {|log| log.compute_node?}
+      future_costs = 0.0
+      logs.each do |log|
+        if log.status == "running"
+          future_costs += @@prices[self.region][log.instance_type]
+        end
+      end
+      daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
+      total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
-    The total estimated requirement is therefore *#{total_future_cu}* compute units per day.
+      remaining_budget = self.budget.to_i - total_costs
+      remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : Time.now
+      time_lag = (instances_date.to_date - date).to_i
+      enough = date + remaining_days + time_lag >= (date << 1).beginning_of_month
+      date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
+      date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
-    *Predicted Usage*
-    "
+      msg = [
+      "#{date_warning if date_warning}",
+      ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
+      "*Monthly Budget:* #{self.budget} compute units",
+      "*Total Costs for #{date_range}:* #{total_costs} compute units",
+      "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
+      "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
+      "Currently, the cluster compute nodes are:",
+      "`#{usage}`\n",
+      "The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.",
+      "Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day.\n",
+      "The total estimated requirement is therefore *#{total_future_cu}* compute units per day.\n",
+      "*Predicted Usage*"
+      ]
 
-    if remaining_budget < 0
-      excess = (total_future_cu * Date.today.end_of_month.day - (Date.today - 2).day)
-      msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* 
-    compute units at the end of the month."
+      if remaining_budget < 0
+        excess = (total_future_cu * date.end_of_month.day - (date).day)
+        msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
+      else
+        msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days."
+        msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      end
+      msg = msg.join("\n") + "\n"
+
+      if report && rerun
+        report.update(content: msg, timestamp: Time.now)
+        report.save!
+      else
+        WeeklyReportLog.create(project_id: self.id, content: msg, date: date, timestamp: Time.now)
+      end
     else
-      msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days.
-    As tracking is *2 days behind*, the budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      msg = "\t\t\t\t\t*Cached Report*\n" << report.content
     end
-
-    send_slack_message(msg)
+    send_slack_message(msg) if slack
+    puts (msg.gsub(":calendar:", "").gsub("*", "").gsub(":awooga:", ""))
+    puts '_' * 50
   end
 
   def get_latest_prices
-    instances = InstanceLog.where(host: "AWS").where('timestamp LIKE ?', "%#{Date.today}%")
-    instances.each do |instance|
+    instance_types = InstanceLog.where(host: "AWS").group(:instance_type).pluck(:instance_type)
+    instance_types.each do |instance_type|
       if !@@prices.has_key?(self.region)
         @@prices[region] = {}
       end
-      if !@@prices[self.region].has_key?(instance.instance_type)
-        @@prices[self.region][instance.instance_type] = get_cost_per_hour(instance.instance_type)
+      if !@@prices[self.region].has_key?(instance_type)
+        @@prices[self.region][instance_type] = get_cost_per_hour(instance_type)
       end
     end
   end
@@ -173,17 +212,17 @@ class AwsProject < Project
     forecast_hours = @explorer.get_usage_forecast(usage_forecast_query).forecast_results_by_time[0].mean_value.to_f
     forecast_cost_rest_of_month = @explorer.get_cost_forecast(rest_of_month_cost_forecast_query).forecast_results_by_time[0].mean_value.to_f
     msg = "
-      :crystal_ball: Forecast for #{Date.today} :crystal_ball:
-      *USD:* #{forecast_cost.round(2)}
-      *Total EC2 Hours:* #{forecast_hours.round(2)}
-      *USD for rest of month:* #{forecast_cost_rest_of_month.round(2)}
+    :crystal_ball: Forecast for #{Date.today} :crystal_ball:
+    *USD:* #{forecast_cost.round(2)}
+    *Total EC2 Hours:* #{forecast_hours.round(2)}
+    *USD for rest of month:* #{forecast_cost_rest_of_month.round(2)}
     "
 
     send_slack_message(msg)
   end
 
   def get_overall_usage(date, customer_facing=false)
-    logs = self.instance_logs.where('timestamp LIKE ?', "%#{date}%").select {|log| log.compute_node?}
+    logs = self.instance_logs.where('timestamp LIKE ? AND status IS NOT ?', "%#{date}%", "terminated").select(&:compute_node?)
 
     instance_counts = {}
     logs.each do |log|
@@ -202,11 +241,12 @@ class AwsProject < Project
 
     overall_usage = ""
     instance_counts.each do |type|
-      overall_usage << " #{type[1]["total"]} "
+      overall_usage << "#{type[1]["total"]} "
       overall_usage << "x #{type[0]}"
       overall_usage << "(#{type[1]["stopped"]} stopped)" if type[1]["stopped"] != nil
+      overall_usage << " "
     end
-    overall_usage == "" ? "None" : overall_usage
+    overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
   def get_usage_hours_by_instance_type(date=(Date.today - 2))
@@ -221,8 +261,10 @@ class AwsProject < Project
     usage_breakdown == "\n\t\t\t\t" ? "None" : usage_breakdown
   end
 
-  def record_instance_logs
-    if self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%").count == 0
+  def record_instance_logs(rerun=false)
+    today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
+    today_logs.delete_all if rerun
+    if today_logs.count == 0
       @instances_checker.describe_instances.reservations.each do |reservation|
         reservation.instances.each do |instance|
           named = ""
