@@ -76,6 +76,25 @@ class AwsProject < Project
       end
     end
 
+    data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
+    # only make query if don't already have data in logs or asked to recalculate
+    if !data_out_cost_log || rerun
+      data_out_cost = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+      if data_out_cost_log && rerun
+        data_out_cost_log.assign_attributes(cost: data_out_cost, timestamp: Time.now.to_s)
+        data_out_cost_log.save!
+      else
+        data_out_cost_log = CostLog.create(
+          project_id: self.id,
+          cost: data_out_cost,
+          currency: "USD",
+          date: date.to_s,
+          scope: "data_out",
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     cached = total_cost_log && !rerun
     # only make query if don't already have data in logs or asked to recalculate
@@ -107,6 +126,9 @@ class AwsProject < Project
       "*Compute Costs (USD):* #{compute_cost_log.cost.to_f.ceil(2)}",
       "*Compute Units (Flat):* #{compute_cost_log.compute_cost}",
       "*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n",
+      "*Data Out Costs (USD):* #{data_out_cost_log.cost.to_f.ceil(2)}",
+      "*Compute Units (Flat):* #{data_out_cost_log.compute_cost}",
+      "*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n",
       "*Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}",
       "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
       "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}\n",
@@ -136,9 +158,12 @@ class AwsProject < Project
         return
       end
       start_date = start_date > date.beginning_of_month ? start_date : date.beginning_of_month
-      costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, date, "MONTHLY")).results_by_time[0]
+      costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
       total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
       total_costs = (total_costs * 10 * 1.25).ceil
+      data_egress_this_month = @explorer.get_cost_and_usage(data_out_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
+      data_egress_costs = data_egress_this_month.total["UnblendedCost"][:amount].to_f
+      data_egress_costs = (data_egress_costs * 10 * 1.25).ceil
 
       logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
       future_costs = 0.0
@@ -162,6 +187,7 @@ class AwsProject < Project
       "#{date_warning if date_warning}",
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
       "*Monthly Budget:* #{self.budget} compute units",
+      "*Data Egress Costs for #{date_range}:* #{data_egress_costs} compute units",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
       "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
       "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
@@ -314,8 +340,8 @@ class AwsProject < Project
     @watcher.get_metric_statistics(instance_cpu_utilization_query(instance_id))
   end
 
-  def get_data_out
-    puts @explorer.get_cost_and_usage(data_out_query)
+  def get_data_out(date=Date.today - 2)
+    @explorer.get_cost_and_usage(data_out_query(date))
   end
 
   def get_ssd_usage
@@ -695,13 +721,13 @@ class AwsProject < Project
     }
   end
 
-  def data_out_query
+  def data_out_query(start_date, end_date=start_date + 1, granularity="DAILY")
     {
       time_period: {
-        start: (Date.today - 20).to_s,
-        end: (Date.today - 1).to_s
+        start: start_date.to_s,
+        end: end_date.to_s
       },
-      granularity: "MONTHLY",
+      granularity: granularity,
       metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
       filter: {
         and: [

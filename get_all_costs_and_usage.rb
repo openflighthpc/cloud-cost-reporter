@@ -4,7 +4,6 @@ require 'date'
 require 'sqlite3'
 require_relative './models/project_factory'
 
-<<<<<<< HEAD
 def all_projects(date, slack, rerun)
   ProjectFactory.new().all_projects_as_type.each do |project|
     project.record_instance_logs(rerun)
@@ -12,7 +11,7 @@ def all_projects(date, slack, rerun)
     #project.each_instance_usage_data
     #project.get_instance_usage_data("i-062dd1030e63f9cff")
     #project.get_instance_cpu_utilization("i-0b2c0cb3524d62615")
-    #project.get_data_out
+    #project.get_data_out(date)
     #project.get_ssd_usage
     #puts project.get_cost_per_hour('r5.2xlarge')
   end

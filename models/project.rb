@@ -58,7 +58,7 @@ class Project < ActiveRecord::Base
   def weekly_report(date=Date.today, slack=true, rerun=false)
   end
 
-  def get_data_out
+  def get_data_out(date=Date.today - 2)
   end
 
   def get_ssd_usage
