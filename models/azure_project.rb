@@ -28,6 +28,10 @@ class AzureProject < Project
     @metadata['bearer_expiry']
   end
 
+  def compute_nodes
+    @compute_nodes ||= api_query_all_vms
+  end
+
   def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
     cost_log = cost_logs.find_by(date: date.to_s)
 
@@ -65,7 +69,6 @@ class AzureProject < Project
       end
     end
 
-<<<<<<< HEAD
     msg = [
         "#{"*Cached report*" if cached}",
         ":moneybag: Usage for #{date.to_s} :moneybag:",
@@ -79,34 +82,24 @@ class AzureProject < Project
     puts "\nProject: #{self.name}\n"
     puts msg.gsub(":moneybag:", "").gsub("*", "")
     puts "_" * 50
-=======
-    response = api_query_vm_view
-    overall_usage=""
+  end
 
-    response.each do |vm|
-      name = vm['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
-      status = case vm['properties']['availabilityState']
-               when 'Unavailable'
-                 ' (powered off)'
-               when 'Available'
-                 ''
-               else
-                 ' (status unknown)'
-               end
-      overall_usage << "\n\t\t\t\t#{name} #{status}"
+  def api_query_all_vms
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/virtualMachines"
+    query = {
+      'api-version': '2020-06-01'
+    }
+    response = HTTParty.get(
+      uri,
+      query: query,
+      headers: { 'Authorization': "Bearer #{bearer_token}" }
+    )
+
+    if response.success?
+      return response['value']
+    else
+      puts "Error querying virtual machines for project #{subscription_id}. Error code #{response.code}."
     end
-
-    msg = "
-      :moneybag: Usage for #{(Date.today - 2).to_s} :moneybag:
-      *GBP:* #{cost_log.cost.to_f.ceil(2)}
-      *Compute Units (Flat):* #{cost_log.compute_cost}
-      *Compute Units (Risk):* #{cost_log.risk_cost}
-      *FC Credits:* #{cost_log.fc_credits_cost}
-      *Compute Instance Usage:* #{overall_usage}
-    "
-
-    send_slack_message(msg)
->>>>>>> 48c224c... Add output section for VM status
   end
 
   def api_query_daily_cost(date)
