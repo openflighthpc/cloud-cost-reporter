@@ -25,7 +25,7 @@ This application includes in its breakdown details of instances specifically use
 
 This application makes use of a number of AWS sdks, which require a valid `Access Key ID` and `Secret Access Key`. This should relate to a user with access to: Billing and Cost Management, Cost Explorer API, EC2 API and Pricing API.
 
-##Azure
+## Azure
 
 tbd
 
@@ -41,19 +41,19 @@ This bot should be invited to each project's chosen slack channel.
 
 A `Project` object should be created for each project you wish to track. These can be created by running `ruby manage_projects.rb` and following the prompts in the command line. This file can also be used to update existing projects.
 
-#Generating reports
+# Generating reports
 
-The application generates both daily and weekly reports of cloud usage and cost data. The contained data is saved in the database and unless specified, queries where an existing report exists will use these instead of making fresh sdk/ api calls.
+The application includes functionality for generating both daily (AWS and Azure) and weekly (AWS) reports of cloud usage and cost data. The obtained data is saved in the database and unless specified, queries where an existing report exists will use stored data instead of making fresh sdk/api calls.
 
-Daily reports can be run using `ruby get_all_costs_and_usage.rb`. If run without any arguments, it will iterate over all Projects in the database and retrieve data for 2 days ago (as cost & usage data takes 2 days to update). The results will be printed to the terminal and posted to the chosen slack channel(s).
+Daily reports can be run using `ruby get_all_costs_and_usage.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for 2 days ago (as cost & usage data takes 2 days to update). The results will be printed to the terminal and posted to the chosen slack channel(s).
 
-Weekly reports can similarly be run using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far. The results will be printed to the terminal and posted to the chosen slack channel(s).
+Weekly reports can similarly be run using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far, including estimating costs for the rest of the month. The results will be printed to the terminal and posted to the chosen slack channel(s).
 
 Both of these files also take up to 4 arguments:
 
-1: project name or 'all'
-2. a specific date or 'latest'
-3(optional). 'slack' or 'text'. If text no message will be sent to slack
-4(optional). 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls
+1: project name or 'all'\
+2: a specific date or 'latest'\
+3 (optional & unordered): 'slack' or 'text'. If text no message will be sent to slack\
+4 (optional & unordered): 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
 
 For example 'ruby get_all_costs_and_usage.rb project1 2020-09-01 rerun' will generate the report for a project called 'project1', with data from the 1st September 2020, using fresh sdk/api calls, posting to slack and printing to the terminal.
