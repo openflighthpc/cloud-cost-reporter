@@ -36,11 +36,6 @@ if ARGV[0] && ARGV[0] != "all"
   if project == nil
     puts "Project with that name not found"
     return
-ProjectFactory.new().all_active_projects_as_type.each do |project|
-  project.record_instance_logs
-  project.get_cost_and_usage
-  if ARGV.include?("forecasts")
-    project.get_forecasts
   end
   project = ProjectFactory.new().as_type(project)
   project.record_instance_logs
