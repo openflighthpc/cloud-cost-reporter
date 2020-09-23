@@ -29,7 +29,7 @@ class AzureProject < Project
   end
 
   def compute_nodes
-    @compute_nodes ||= api_query_all_vms
+    @compute_nodes ||= api_query_compute_nodes
   end
 
   def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
@@ -84,10 +84,10 @@ class AzureProject < Project
     puts "_" * 50
   end
 
-  def api_query_all_vms
+  def api_query_compute_nodes
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/virtualMachines"
     query = {
-      'api-version': '2020-06-01'
+      'api-version': '2020-06-01',
     }
     response = HTTParty.get(
       uri,
@@ -96,9 +96,10 @@ class AzureProject < Project
     )
 
     if response.success?
-      return response['value']
+      vms = response['value']
+      vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' }
     else
-      puts "Error querying virtual machines for project #{subscription_id}. Error code #{response.code}."
+      puts "Error querying compute nodes for project #{subscription_id}. Error code #{response.code}."
     end
   end
 
