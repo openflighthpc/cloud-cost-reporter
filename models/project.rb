@@ -2,6 +2,7 @@ require 'active_record'
 require_relative 'weekly_report_log'
 require_relative 'cost_log'
 require_relative 'instance_log'
+require_relative 'usage_log'
 
 ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
 
@@ -11,6 +12,7 @@ class Project < ActiveRecord::Base
   has_many :cost_logs
   has_many :instance_logs
   has_many :weekly_report_logs
+  has_many :usage_logs
 
   validates :name, presence: true, uniqueness: true
   validates :slack_channel, presence: true
@@ -55,7 +57,7 @@ class Project < ActiveRecord::Base
   def record_cost_log
   end
 
-  def weekly_report(date=Date.today, slack=true, rerun=false)
+  def weekly_report(date=Date.today - 2, slack=true, rerun=false)
   end
 
   def get_data_out(date=Date.today - 2)
