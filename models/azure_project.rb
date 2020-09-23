@@ -3,7 +3,7 @@ require 'pp'
 
 class AzureProject < Project
   after_initialize :construct_metadata
-
+  after_initialize :refresh_auth_token
   def tenant_id
     @metadata['tenant_id']
   end
@@ -35,12 +35,6 @@ class AzureProject < Project
   def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
     cost_log = cost_logs.find_by(date: date.to_s)
 
-    # refresh authorization token if necessary
-    # tokens last for 3600 seconds (one hour)
-    if Time.now.to_i > bearer_expiry.to_i
-      update_bearer_token
-    end
-
     total_cost_log = cost_logs.find_by(date: date.to_s)
     cached = total_cost_log && !rerun
 
@@ -69,13 +63,16 @@ class AzureProject < Project
       end
     end
 
+    overall_usage = get_overall_usage(date)
+
     msg = [
         "#{"*Cached report*" if cached}",
         ":moneybag: Usage for #{date.to_s} :moneybag:",
         "*GBP:* #{total_cost_log.cost.to_f.ceil(2)}",
         "*Compute Units (Flat):* #{total_cost_log.compute_cost}",
         "*Compute Units (Risk):* #{total_cost_log.risk_cost}",
-        "*FC Credits:* #{total_cost_log.fc_credits_cost}"
+        "*FC Credits:* #{total_cost_log.fc_credits_cost}",
+        "*Compute Instance Usage:* #{overall_usage}"
       ].join("\n") + "\n"
     send_slack_message(msg) if slack
 
@@ -83,6 +80,61 @@ class AzureProject < Project
     puts msg.gsub(":moneybag:", "").gsub("*", "")
     puts "_" * 50
   end
+
+  def record_instance_logs(rerun=false)
+    today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
+    today.logs.delete_all if rerun
+    if !today_logs.any?
+      active_nodes = api_query_active_nodes
+      active_nodes&.each do |node|
+        name = node['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
+        cnode = compute_nodes.detect do |compute_node|
+                  compute_node['name'] == name
+                end
+        type = cnode['properties']['hardwareProfile']['vmSize']
+        compute = cnode.key?('tags') && cnode['tags']['type'] == 'compute'
+        InstanceLog.create(
+          instance_id: node['id'],
+          project_id: id,
+          instance_type: type,
+          instance_name: name,
+          compute: compute ? 1 : 0,
+          status: node['properties']['availabilityStatus'],
+          host: 'Azure',
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+  end
+
+  def get_overall_usage(date)
+    logs = self.instance_logs.where('timestamp LIKE ?', "%#{date}%").where(compute: 1)
+
+    instance_counts = {}
+    logs.each do |log|
+      type = log.type
+      if !instance_counts.has_key?(type)
+        instance_counts[type] = {log.status => 1, "total" => 1}
+      else
+        if !instance_counts[type].has_key?(log.status)
+          instance_counts[type][log.status] = 1
+        else
+          instance_counts[type][log.status] = instance_counts[type][log.status] + 1
+        end
+        instance_counts[type]['total'] = instance_counts[type]['total'] + 1
+      end
+    end
+
+    overall_usage = ""
+    instance_counts.each do |type|
+      overall_usage << "#{type[1]["total"]} "
+      overall_usage << "x #{type[0]}"
+      overall_usage << "(#{type[1]["Unavailable"]} stopped)" if type[1]['Unavailable'] != nil
+      overall_usage << " "
+    end
+    overall_usage == "" ? "None recorded" : overall_usage.strip
+  end
+
 
   def api_query_compute_nodes
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/virtualMachines"
@@ -116,13 +168,14 @@ class AzureProject < Project
     )
 
     if response.success?
-      return response['value']
+      details = response['value']
+      details.select { |cd| compute_nodes.any? { |node| node['name'] == cd['name'] } }
     else
       puts "Error querying daily cost Azure API for project #{name}. Error code #{response.code}."
     end
   end
 
-  def api_query_vm_view
+  def api_query_active_nodes
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.ResourceHealth/availabilityStatuses"
     query = {
       'api-version': '2020-05-01',
@@ -135,7 +188,12 @@ class AzureProject < Project
     )
 
     if response.success?
-      return response['value']
+      nodes = response['value']
+      nodes.select do |node|
+        compute_nodes.any? do |cn|
+          node['id'].match(/virtualMachines\/(.*)\/providers/i)[1] == cn['name']
+        end
+      end
     else
       puts "Error querying node status Azure API for project #{name}. Error code #{response.code}."
     end
@@ -167,6 +225,14 @@ class AzureProject < Project
   end
 
   private
+
+  def refresh_auth_token
+    # refresh authorization token if necessary
+    # tokens last for 3600 seconds (one hour)
+    if Time.now.to_i > bearer_expiry.to_i
+      update_bearer_token
+    end
+  end
 
   def construct_metadata
     @metadata = JSON.parse(metadata)
