@@ -156,7 +156,7 @@ class AwsProject < Project
       "The total estimated requirement is therefore *#{total_future_cu}* compute units per day.\n",
       "*Predicted Usage*"
       ]
-      puts time_lag
+
       if remaining_budget < 0
         msg << ":awooga:The monthly budget *has been exceeded*:awooga:."
       else
@@ -339,7 +339,7 @@ class AwsProject < Project
   end
 
   def get_usage_hours_by_instance_type(date=(Date.today - 2), rerun)
-    logs = self.usage_logs.where(unit: "hours").where(start_date: date).where(end_date: date + 1)
+    logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: date).where(end_date: date + 1)
     logs.delete_all if rerun
     usage_breakdown = "\n\t\t\t\t"
     if !logs.any?
