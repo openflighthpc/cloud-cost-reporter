@@ -1,6 +1,10 @@
 # ruby-cost-tracker
 
-A proof of concept application for tracking Azure and AWS costs. Built in Ruby (no framework), with a basic SQLite database.
+Tracker tool for Azure and AWS costs.
+
+## Overview
+
+A proof of concept application for tracking Azure and AWS costs and usage. Built in Ruby (no framework), with a basic SQLite database.
 
 ## Installation
 
@@ -15,7 +19,9 @@ bundle install
 
 To create the local database, run `db/setup.rb`.
 
-## AWS setup
+## Configuration
+
+### AWS 
 
 On AWS, projects can be tracked on an account or project tag level. For tracking by project tag, ensure that all desired resources are given a tag with the key `project` and a value of what you have named the project. 
 
@@ -27,11 +33,11 @@ The project and compute tags must also be activated in the Billing console (see 
 
 This application makes use of a number of AWS sdks, which require a valid `Access Key ID` and `Secret Access Key`. This should relate to a user with access to: Billing and Cost Management, Cost Explorer API, EC2 API and Pricing API.
 
-## Azure
+### Azure
 
 tbd
 
-## Slack setup
+### Slack
 
 The application includes the option to send results to slack, specifying a specific channel for each project. To use this function, a slack bot (https://slack.com/apps/A0F7YS25R-bots) must be created. The bot's API Token should then be used to set an environment variable:
 
@@ -39,11 +45,11 @@ The application includes the option to send results to slack, specifying a speci
 
 This bot must be invited to each project's chosen slack channel.
 
-## Adding projects
+### Adding projects
 
 A `Project` object should be created for each project you wish to track. These can be created by running `ruby manage_projects.rb` and following the prompts in the command line. This file can also be used to update existing projects.
 
-# Generating reports
+# Operation
 
 The application includes functionality for generating both daily (AWS and Azure) and weekly (AWS) reports of cloud usage and cost data. The obtained data is saved in the database and, unless specified, queries where an existing report exists will use stored data instead of making fresh sdk/api calls.
 
@@ -59,3 +65,30 @@ Both of these files also take up to 4 arguments:
 4 (optional & unordered): 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
 
 For example 'ruby get_all_costs_and_usage.rb project1 2020-09-01 rerun' will generate the report for a project called 'project1', with data from the 1st September 2020, using fresh sdk/api calls, posting to slack and printing to the terminal.
+
+# Contributing
+
+Fork the project. Make your feature addition or bug fix. Send a pull
+request. Bonus points for topic branches.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
+
+# Copyright and License
+
+Eclipse Public License 2.0, see [LICENSE.txt](LICENSE.txt) for details.
+
+Copyright (C) 2020-present Alces Flight Ltd.
+
+This program and the accompanying materials are made available under
+the terms of the Eclipse Public License 2.0 which is available at
+[https://www.eclipse.org/legal/epl-2.0](https://www.eclipse.org/legal/epl-2.0),
+or alternative license terms made available by Alces Flight Ltd -
+please direct inquiries about licensing to
+[licensing@alces-flight.com](mailto:licensing@alces-flight.com).
+
+ruby-cost-tracker is distributed in the hope that it will be
+useful, but WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER
+EXPRESS OR IMPLIED INCLUDING, WITHOUT LIMITATION, ANY WARRANTIES OR
+CONDITIONS OF TITLE, NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR
+A PARTICULAR PURPOSE. See the [Eclipse Public License 2.0](https://opensource.org/licenses/EPL-2.0) for more
+details.
