@@ -142,17 +142,28 @@ class AzureProject < Project
 
       compute_nodes = self.instance_logs.where(compute: 1).where('timestamp LIKE ?', "%#{start_date.to_s[0..6]}%")
       compute_costs_this_month = costs_this_month.select { |cd| compute_nodes.any? { |node| node.instance_name == cd['properties']['resourceName'] } }
-      #update_prices(compute_costs_this_month, date)
       compute_costs = begin
                      compute_costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
                    rescue NoMethodError
                      0.0
                    end
       compute_costs = (compute_costs * 10 * 1.25).ceil
-      
-      remaining_budget = self.budget - total_costs
+
       logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : date + 0.5
+      update_prices
+      future_costs = 0.0
+      logs.each do |log|
+        type = log.instance_type.gsub("Standard_", "").gsub("_", " ")
+        future_costs += @@prices[type][0]
+      end
+      daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
+      total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
+
+      remaining_budget = self.budget.to_i - total_costs
+      remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : Time.now
+      time_lag = (instances_date.to_date - date).to_i
+      enough = date + remaining_days + time_lag >= (date << 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
       date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
@@ -160,14 +171,24 @@ class AzureProject < Project
       "#{date_warning if date_warning}",
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
       "*Monthly Budget:* #{self.budget} compute units",
-      "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
       "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
       "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
       "Currently, the cluster compute nodes are:",
       "`#{usage}`\n",
+      "The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.",
+      "Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day.\n",
+      "The total estimated requirement is therefore *#{total_future_cu}* compute units per day.\n",
+      "*Predicted Usage*"
       ]
 
+      if remaining_budget < 0
+        excess = (total_future_cu * date.end_of_month.day - (date).day)
+        msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
+      else
+        msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days."
+        msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      end
       msg = msg.join("\n") + "\n"
 
       if report && rerun
@@ -327,23 +348,25 @@ class AzureProject < Project
   end
 
   def get_prices
-    update_bearer_token
-    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
-    response = HTTParty.get(
-      uri,
-      headers: { 'Authorization': "Bearer #{bearer_token}" }
-    )
+    if @@prices = {}
+      update_bearer_token
+      uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
+      response = HTTParty.get(
+        uri,
+        headers: { 'Authorization': "Bearer #{bearer_token}" }
+      )
 
-    File.write('prices.txt', "")
-    response['Meters'].each do |meter|
-      if meter['MeterRegion'] == 'UK South' && meter['MeterCategory'] == "Virtual Machines" &&
-        !meter['MeterName'].downcase.include?('low priority') &&
-        !meter["MeterSubCategory"].downcase.include?("windows")
-        File.write("prices.txt", meter.to_json, mode: "a")
-        File.write("prices.txt", "\n", mode: "a")
+      File.write('azure_prices.txt', "")
+      response['Meters'].each do |meter|
+        if meter['MeterRegion'] == 'UK South' && meter['MeterCategory'] == "Virtual Machines" &&
+          !meter['MeterName'].downcase.include?('low priority') &&
+          !meter["MeterSubCategory"].downcase.include?("windows")
+          File.write("azure_prices.txt", meter.to_json, mode: "a")
+          File.write("azure_prices.txt", "\n", mode: "a")
+        end
       end
+      update_prices
     end
-    update_prices
   end
 
   private
@@ -361,13 +384,12 @@ class AzureProject < Project
   end
 
   def update_prices
-    File.open('prices.txt').each do |entry|
+    File.open('azure_prices.txt').each do |entry|
       entry = JSON.parse(entry)
       if @@prices[entry['MeterName']] == nil || 
         Date.parse(entry['EffectiveDate']) > @@prices[entry['MeterName']][1] 
         @@prices[entry['MeterName']] = [entry['MeterRates']["0"].to_f, Date.parse(entry['EffectiveDate'])]
       end
     end
-    puts @@prices
    end
 end

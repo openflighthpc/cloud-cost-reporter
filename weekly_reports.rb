@@ -32,7 +32,7 @@ if ARGV[0] && ARGV[0] != "all"
   end
   project = ProjectFactory.new().as_type(project)
   project.get_prices
-  #project.weekly_report(date, slack, rerun)
+  project.weekly_report(date, slack, rerun)
 else
   all_projects(date, slack, rerun)
 end
