@@ -73,7 +73,7 @@ class AwsProject < Project
       "*Compute Costs (USD):* #{compute_cost_log.cost.to_f.ceil(2)}",
       "*Compute Units (Flat):* #{compute_cost_log.compute_cost}",
       "*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n",
-      "*Data Out (GB):* #{data_out_amount_log.amount.to_f.ceil(2)}",
+      "*Data Out (GB):* #{data_out_amount_log.amount.to_f.ceil(4)}",
       "*Data Out Costs (USD):* #{data_out_cost_log.cost.to_f.ceil(2)}",
       "*Compute Units (Flat):* #{data_out_cost_log.compute_cost}",
       "*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n",
@@ -201,12 +201,7 @@ class AwsProject < Project
 
     # only make query if don't already have data in logs or asked to recalculate
     if !compute_cost_log || rerun
-      compute_instance_costs = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:groups]
-      compute_cost = 0
-      compute_instance_costs.each do |instance|
-        compute_cost += instance[:metrics]["UnblendedCost"][:amount].to_f
-      end
-      
+      compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
       if rerun && compute_cost_log
         compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
         compute_cost_log.save!
