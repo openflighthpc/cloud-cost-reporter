@@ -36,6 +36,10 @@ class AzureProject < Project
     self.instance_logs.where("timestamp LIKE ?", "%#{date}%").where(compute: 1) 
   end
 
+  def resource_group
+    @metadata['resource_group']
+  end
+
   def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
     record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
     cost_log = cost_logs.find_by(date: date.to_s)
@@ -168,7 +172,7 @@ class AzureProject < Project
 
 
   def api_query_compute_nodes
-    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/virtualMachines"
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/resourceGroups/#{resource_group}/providers/Microsoft.Compute/virtualMachines"
     query = {
       'api-version': '2020-06-01',
     }
@@ -182,7 +186,7 @@ class AzureProject < Project
       vms = response['value']
       vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' }
     else
-      puts "Error querying compute nodes for project #{subscription_id}. Error code #{response.code}."
+      puts "Error querying compute nodes for project #{name}/#{resource_group}. Error code #{response.code}."
     end
   end
 
@@ -190,7 +194,7 @@ class AzureProject < Project
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails"
     query = {
       'api-version': '2019-10-01',
-      '$filter': "properties/usageStart eq '#{date.to_s}' and properties/usageEnd eq '#{date.to_s}'"
+      '$filter': "properties/usageStart eq '#{date.to_s}' and properties/usageEnd eq '#{date.to_s}' and properties/resourceGroup eq '#{resource_group}'"
     }
     response = HTTParty.get(
       uri,
@@ -201,12 +205,12 @@ class AzureProject < Project
     if response.success?
       details = response['value']
     else
-      puts "Error querying daily cost Azure API for project #{name}. Error code #{response.code}."
+      puts "Error querying daily cost Azure API for project #{name}/#{resource_group}. Error code #{response.code}."
     end
   end
 
   def api_query_active_nodes
-    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.ResourceHealth/availabilityStatuses"
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/resourceGroups/#{resource_group}/providers/Microsoft.ResourceHealth/availabilityStatuses"
     query = {
       'api-version': '2020-05-01',
       '$filter': "resourceType eq 'Microsoft.Compute/virtualMachines'"
@@ -225,7 +229,7 @@ class AzureProject < Project
         end
       end
     else
-      puts "Error querying node status Azure API for project #{name}. Error code #{response.code}."
+      puts "Error querying node status Azure API for project #{name}/#{resource_group}. Error code #{response.code}."
     end
   end
 

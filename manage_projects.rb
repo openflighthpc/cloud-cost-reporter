@@ -107,6 +107,8 @@ def add_project
     metadata["subscription_id"] = gets.chomp
     print "Client Secret: "
     metadata["client_secret"] = gets.chomp
+    print "Resource group name: "
+    metadata["resource_group"] = gets.chomp
   end
   attributes[:metadata] = metadata.to_json
   
