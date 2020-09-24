@@ -83,7 +83,7 @@ class AzureProject < Project
 
   def record_instance_logs(rerun=false)
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
-    today.logs.delete_all if rerun
+    today_logs.delete_all if rerun
     if !today_logs.any?
       active_nodes = api_query_active_nodes
       active_nodes&.each do |node|
@@ -99,7 +99,7 @@ class AzureProject < Project
           instance_type: type,
           instance_name: name,
           compute: compute ? 1 : 0,
-          status: node['properties']['availabilityStatus'],
+          status: node['properties']['availabilityState'],
           host: 'Azure',
           timestamp: Time.now.to_s
         )
@@ -112,7 +112,7 @@ class AzureProject < Project
 
     instance_counts = {}
     logs.each do |log|
-      type = log.type
+      type = log.instance_type
       if !instance_counts.has_key?(type)
         instance_counts[type] = {log.status => 1, "total" => 1}
       else
