@@ -171,6 +171,7 @@ class AzureProject < Project
       "#{date_warning if date_warning}",
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
       "*Monthly Budget:* #{self.budget} compute units",
+      "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
       "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
       "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
@@ -391,5 +392,5 @@ class AzureProject < Project
         @@prices[entry['MeterName']] = [entry['MeterRates']["0"].to_f, Date.parse(entry['EffectiveDate'])]
       end
     end
-   end
+  end
 end
