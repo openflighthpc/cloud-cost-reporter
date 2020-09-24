@@ -326,6 +326,26 @@ class AzureProject < Project
     end
   end
 
+  def get_prices
+    update_bearer_token
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
+    response = HTTParty.get(
+      uri,
+      headers: { 'Authorization': "Bearer #{bearer_token}" }
+    )
+
+    File.write('prices.txt', "")
+    response['Meters'].each do |meter|
+      if meter['MeterRegion'] == 'UK South' && meter['MeterCategory'] == "Virtual Machines" &&
+        !meter['MeterName'].downcase.include?('low priority') &&
+        !meter["MeterSubCategory"].downcase.include?("windows")
+        File.write("prices.txt", meter.to_json, mode: "a")
+        File.write("prices.txt", "\n", mode: "a")
+      end
+    end
+    update_prices
+  end
+
   private
 
   def refresh_auth_token
@@ -340,13 +360,14 @@ class AzureProject < Project
     @metadata = JSON.parse(metadata)
   end
 
-  # def update_prices(cost_entries, date)
-  #   cost_entries.each do |entry|
-  #     if @@prices[entry['properties']['resourceName']] == nil || 
-  #       Date.parse(entry['properties']['date']) > Date.parse(@@prices[entry['properties']['resourceName']][1])
-  #       @@prices[entry['properties']['resourceName']] = [entry['properties']['effectivePrice'].to_f, entry['properties']['date']]
-  #     end
-  #   end
-  #   puts @@prices
-  # end
+  def update_prices
+    File.open('prices.txt').each do |entry|
+      entry = JSON.parse(entry)
+      if @@prices[entry['MeterName']] == nil || 
+        Date.parse(entry['EffectiveDate']) > @@prices[entry['MeterName']][1] 
+        @@prices[entry['MeterName']] = [entry['MeterRates']["0"].to_f, Date.parse(entry['EffectiveDate'])]
+      end
+    end
+    puts @@prices
+   end
 end
