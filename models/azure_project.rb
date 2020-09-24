@@ -28,17 +28,23 @@ class AzureProject < Project
     @metadata['bearer_expiry']
   end
 
-  def compute_nodes
-    @compute_nodes ||= api_query_compute_nodes
+  def today_compute_nodes
+    @today_compute_nodes ||= api_query_compute_nodes
+  end
+
+  def historic_compute_nodes(date)
+    self.instance_logs.where("timestamp LIKE ?", "%#{date}%").where(compute: 1) 
   end
 
   def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
+    record_instance_logs(rerun) if date >= Date.today - 2
     cost_log = cost_logs.find_by(date: date.to_s)
 
-    total_cost_log = cost_logs.find_by(date: date.to_s)
+    total_cost_log = cost_logs.find_by(date: date.to_s, scope: "total")
+    compute_cost_log = cost_logs.find_by(date: date.to_s, scope: "compute")
     cached = total_cost_log && !rerun
 
-    if !total_cost_log || rerun
+    if !total_cost_log || !compute_cost_log || rerun
       response = api_query_daily_cost(date)
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
@@ -49,14 +55,36 @@ class AzureProject < Project
                      0.0
                    end
 
+      response.select! { |cd| historic_compute_nodes(date).any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      compute_cost = begin
+                     response.map { |c| c['properties']['cost'] }.reduce(:+)
+                   rescue NoMethodError
+                     0.0
+                   end
+
       if rerun && total_cost_log
         total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
+        total_cost_log.save!
       else
         total_cost_log = CostLog.create(
           project_id: id,
           cost: daily_cost,
           currency: 'GBP',
           scope: 'total',
+          date: date.to_s,
+          timestamp: Time.now.to_s
+        )
+      end
+
+      if rerun && compute_cost_log
+        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
+        compute_cost_log.save!
+      else
+        compute_cost_log = CostLog.create(
+          project_id: id,
+          cost: compute_cost,
+          currency: 'GBP',
+          scope: 'compute',
           date: date.to_s,
           timestamp: Time.now.to_s
         )
@@ -68,9 +96,12 @@ class AzureProject < Project
     msg = [
         "#{"*Cached report*" if cached}",
         ":moneybag: Usage for #{date.to_s} :moneybag:",
+        "*Compute Cost (GBP):* #{compute_cost_log.cost.to_f.ceil(2)}",
+        "*Compute Units (Flat):* #{compute_cost_log.compute_cost}",
+        "*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n",
         "*Total Cost (GBP):* #{total_cost_log.cost.to_f.ceil(2)}",
         "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
-        "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}",
+        "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}\n",
         "*FC Credits:* #{total_cost_log.fc_credits_cost}",
         "*Compute Instance Usage:* #{overall_usage}"
       ].join("\n") + "\n"
@@ -88,7 +119,7 @@ class AzureProject < Project
       active_nodes = api_query_active_nodes
       active_nodes&.each do |node|
         name = node['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
-        cnode = compute_nodes.detect do |compute_node|
+        cnode = today_compute_nodes.detect do |compute_node|
                   compute_node['name'] == name
                 end
         type = cnode['properties']['hardwareProfile']['vmSize']
@@ -169,7 +200,6 @@ class AzureProject < Project
 
     if response.success?
       details = response['value']
-      details.select { |cd| compute_nodes.any? { |node| node['name'] == cd['name'] } }
     else
       puts "Error querying daily cost Azure API for project #{name}. Error code #{response.code}."
     end
@@ -190,7 +220,7 @@ class AzureProject < Project
     if response.success?
       nodes = response['value']
       nodes.select do |node|
-        compute_nodes.any? do |cn|
+        today_compute_nodes.any? do |cn|
           node['id'].match(/virtualMachines\/(.*)\/providers/i)[1] == cn['name']
         end
       end

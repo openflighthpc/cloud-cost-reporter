@@ -51,6 +51,7 @@ class AwsProject < Project
       return
     end
 
+    record_instance_logs(rerun) if date >= Date.today - 2
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
     # only make query if don't already have data in logs or asked to recalculate
