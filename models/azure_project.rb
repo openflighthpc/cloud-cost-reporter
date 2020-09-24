@@ -49,7 +49,7 @@ class AzureProject < Project
     cached = total_cost_log && !rerun
 
     if !total_cost_log || !compute_cost_log || rerun
-      response = api_query_daily_cost(date)
+      response = api_query_cost(date)
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
       # Cost Analysis page (under 'Actual Cost') for the period selected.
@@ -116,6 +116,70 @@ class AzureProject < Project
     puts "_" * 50
   end
 
+  def weekly_report(date=Date.today - 2, slack=true, rerun=false)
+    report = self.weekly_report_logs.find_by(date: date)
+    msg = ""
+    if report == nil || rerun
+      record_instance_logs(rerun)
+      usage = get_overall_usage((date == Date.today - 2 ? Date.today : date), true)
+
+      start_date = Date.parse(self.start_date)
+      if date < start_date
+        puts "Given date is before the project start date"
+        return
+      end
+      start_date = start_date > date.beginning_of_month ? start_date : date.beginning_of_month
+      costs_this_month = api_query_cost(start_date, date)
+      total_costs = begin
+                     costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
+                   rescue NoMethodError
+                     0.0
+                   end
+      total_costs = (total_costs * 10 * 1.25).ceil
+
+      compute_nodes = self.instance_logs.where(compute: 1).where('timestamp LIKE ?', "%#{start_date.to_s[0..6]}%")
+      compute_costs_this_month = costs_this_month.select { |cd| compute_nodes.any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      compute_costs = begin
+                     compute_costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
+                   rescue NoMethodError
+                     0.0
+                   end
+      compute_costs = (compute_costs * 10 * 1.25).ceil
+      
+      remaining_budget = self.budget - total_costs
+      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : date + 0.5
+      date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
+      date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
+
+      msg = [
+      "#{date_warning if date_warning}",
+      ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
+      "*Monthly Budget:* #{self.budget} compute units",
+      "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
+      "*Total Costs for #{date_range}:* #{total_costs} compute units",
+      "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
+      "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
+      "Currently, the cluster compute nodes are:",
+      "`#{usage}`\n",
+      ]
+
+      msg = msg.join("\n") + "\n"
+
+      if report && rerun
+        report.update(content: msg, timestamp: Time.now)
+        report.save!
+      else
+        WeeklyReportLog.create(project_id: self.id, content: msg, date: date, timestamp: Time.now)
+      end
+    else
+      msg = "\t\t\t\t\t*Cached Report*\n" << report.content
+    end
+    send_slack_message(msg) if slack
+    puts (msg.gsub(":calendar:", "").gsub("*", "").gsub(":awooga:", ""))
+    puts '_' * 50
+  end
+
   def record_instance_logs(rerun=false)
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
@@ -142,12 +206,12 @@ class AzureProject < Project
     end
   end
 
-  def get_overall_usage(date)
+  def get_overall_usage(date, customer_facing=false)
     logs = self.instance_logs.where('timestamp LIKE ?', "%#{date}%").where(compute: 1)
 
     instance_counts = {}
     logs.each do |log|
-      type = log.instance_type
+      type = customer_facing ? log.customer_facing_type : log.instance_type
       if !instance_counts.has_key?(type)
         instance_counts[type] = {log.status => 1, "total" => 1}
       else
@@ -190,11 +254,11 @@ class AzureProject < Project
     end
   end
 
-  def api_query_daily_cost(date)
+  def api_query_cost(start_date, end_date=start_date)
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails"
     query = {
       'api-version': '2019-10-01',
-      '$filter': "properties/usageStart eq '#{date.to_s}' and properties/usageEnd eq '#{date.to_s}' and properties/resourceGroup eq '#{resource_group}'"
+      '$filter': "properties/usageStart eq '#{start_date.to_s}' and properties/usageEnd eq '#{end_date.to_s}' and properties/resourceGroup eq '#{resource_group}'"
     }
     response = HTTParty.get(
       uri,
