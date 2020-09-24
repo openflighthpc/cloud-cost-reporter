@@ -68,9 +68,9 @@ class AzureProject < Project
     msg = [
         "#{"*Cached report*" if cached}",
         ":moneybag: Usage for #{date.to_s} :moneybag:",
-        "*GBP:* #{total_cost_log.cost.to_f.ceil(2)}",
-        "*Compute Units (Flat):* #{total_cost_log.compute_cost}",
-        "*Compute Units (Risk):* #{total_cost_log.risk_cost}",
+        "*Total Cost (GBP):* #{total_cost_log.cost.to_f.ceil(2)}",
+        "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
+        "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}",
         "*FC Credits:* #{total_cost_log.fc_credits_cost}",
         "*Compute Instance Usage:* #{overall_usage}"
       ].join("\n") + "\n"
