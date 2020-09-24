@@ -2,8 +2,11 @@ require_relative 'project'
 require 'pp'
 
 class AzureProject < Project
+  @@prices = {}
+
   after_initialize :construct_metadata
   after_initialize :refresh_auth_token
+  
   def tenant_id
     @metadata['tenant_id']
   end
@@ -139,6 +142,7 @@ class AzureProject < Project
 
       compute_nodes = self.instance_logs.where(compute: 1).where('timestamp LIKE ?', "%#{start_date.to_s[0..6]}%")
       compute_costs_this_month = costs_this_month.select { |cd| compute_nodes.any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      #update_prices(compute_costs_this_month, date)
       compute_costs = begin
                      compute_costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
                    rescue NoMethodError
@@ -336,4 +340,13 @@ class AzureProject < Project
     @metadata = JSON.parse(metadata)
   end
 
+  # def update_prices(cost_entries, date)
+  #   cost_entries.each do |entry|
+  #     if @@prices[entry['properties']['resourceName']] == nil || 
+  #       Date.parse(entry['properties']['date']) > Date.parse(@@prices[entry['properties']['resourceName']][1])
+  #       @@prices[entry['properties']['resourceName']] = [entry['properties']['effectivePrice'].to_f, entry['properties']['date']]
+  #     end
+  #   end
+  #   puts @@prices
+  # end
 end
