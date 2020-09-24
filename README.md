@@ -39,6 +39,8 @@ In this application, Azure projects are assumed to be confined to a single Azure
 
 The point at which tags are added does not affect the data pulled from the Azure API. As long as the resources that you want to analyse have the tag, the detail objects associated with that resource will be queried.
 
+In order to run the application, an app and service principal must be created in Azure Active Directory (see https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal for more details). The app must have at least `Reader` level permissions given to it in the subscription you with to use it in via the `Access control (IAM)` blade.
+
 Azure projects require the following details to be obtained prior to project creation:
 
 - Directory (tenant) ID
@@ -47,8 +49,7 @@ Azure projects require the following details to be obtained prior to project cre
 - Subscription ID
 - Resource group name
 
-The first three can be obtained via the app you created in Azure Active Directory (see https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal for more details). The subscription ID is located in the overview for the subscription containing the project; as is the resource group name in the overview for the resource group.
-
+The first three can be obtained via the app you created in Azure Active Directory. The subscription ID is located in the overview for the subscription containing the project; as is the resource group name in the overview for the resource group.
 
 ### Slack
 
