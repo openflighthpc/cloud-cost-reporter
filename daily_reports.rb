@@ -13,6 +13,7 @@ date = Date.today - 2
 project = nil
 rerun = ARGV.include?("rerun")
 slack = !ARGV.include?("text")
+$verbose = ARGV.include?("verbose")
 
 if ARGV[1] && ARGV[1] != "latest"
   valid = Date.parse(ARGV[1]) rescue false
@@ -34,3 +35,5 @@ if ARGV[0] && ARGV[0] != "all"
 else
   all_projects(date, slack, rerun)
 end
+
+

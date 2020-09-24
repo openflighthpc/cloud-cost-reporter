@@ -289,6 +289,9 @@ class AzureProject < Project
       vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' }
     else
       puts "Error querying compute nodes for project #{name}/#{resource_group}. Error code #{response.code}."
+      if $verbose
+        puts response
+      end
     end
   end
 
@@ -308,6 +311,9 @@ class AzureProject < Project
       details = response['value']
     else
       puts "Error querying daily cost Azure API for project #{name}/#{resource_group}. Error code #{response.code}."
+      if $verbose
+        puts response
+      end
     end
   end
 
@@ -332,6 +338,9 @@ class AzureProject < Project
       end
     else
       puts "Error querying node status Azure API for project #{name}/#{resource_group}. Error code #{response.code}."
+      if $verbose
+        puts response
+      end
     end
   end
 
@@ -357,6 +366,9 @@ class AzureProject < Project
       self.save
     else
       puts "Error obtaining new authorization token for project #{name}. Error code #{response.code}."
+      if $verbose
+        puts response
+      end
     end
   end
 
