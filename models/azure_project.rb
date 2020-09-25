@@ -364,14 +364,18 @@ class AzureProject < Project
         headers: { 'Authorization': "Bearer #{bearer_token}" }
       )
 
-      File.write('azure_prices.txt', "#{Time.now}\n")
-      response['Meters'].each do |meter|
-        if meter['MeterRegion'].include?('UK') && meter['MeterCategory'] == "Virtual Machines" &&
-          !meter['MeterName'].downcase.include?('low priority') &&
-          !meter["MeterSubCategory"].downcase.include?("windows")
-          File.write("azure_prices.txt", meter.to_json, mode: "a")
-          File.write("azure_prices.txt", "\n", mode: "a")
+      if response.success?
+        File.write('azure_prices.txt', "#{Time.now}\n")
+        response['Meters'].each do |meter|
+          if meter['MeterRegion'].include?('UK') && meter['MeterCategory'] == "Virtual Machines" &&
+            !meter['MeterName'].downcase.include?('low priority') &&
+            !meter["MeterSubCategory"].downcase.include?("windows")
+            File.write("azure_prices.txt", meter.to_json, mode: "a")
+            File.write("azure_prices.txt", "\n", mode: "a")
+          end
         end
+      else
+        puts "Error obtaining latest azure price list. Error code #{response.code}."
       end
     end
   end
