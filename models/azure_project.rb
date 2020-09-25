@@ -434,3 +434,6 @@ class AzureProject < Project
     end
   end
 end
+
+class AzureApiError < StandardError
+end
