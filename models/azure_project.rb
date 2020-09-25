@@ -134,6 +134,9 @@ class AzureProject < Project
       if date < start_date
         puts "Given date is before the project start date"
         return
+      elsif date > Date.today
+        puts "Given date is in the future"
+        return
       end
       start_date = start_date > date.beginning_of_month ? start_date : date.beginning_of_month
       costs_this_month = api_query_cost(start_date, date)
@@ -167,11 +170,11 @@ class AzureProject < Project
 
       remaining_budget = self.budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : Time.now
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == Date.today - 2 ? Time.now : date + 0.5)
       time_lag = (instances_date.to_date - date).to_i
-      enough = date + remaining_days + time_lag >= (date << 1).beginning_of_month
+      enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
-      date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
+      date_warning = date > Date.today - 2 ? "\nWarning: data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
       msg = [
       "#{date_warning if date_warning}",
@@ -190,11 +193,14 @@ class AzureProject < Project
       ]
 
       if remaining_budget < 0
-        excess = (total_future_cu * date.end_of_month.day - (date).day)
-        msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
+        msg << ":awooga:The monthly budget *has been exceeded*:awooga:."
       else
         msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days."
         msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      end
+      if remaining_budget < 0 || !enough
+        excess = (total_future_cu * date.end_of_month.day - (date).day)
+        msg << "Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
       end
       msg = msg.join("\n") + "\n"
 

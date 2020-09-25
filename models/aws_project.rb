@@ -133,7 +133,7 @@ class AwsProject < Project
 
       remaining_budget = self.budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : date + 0.5
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == Date.today - 2 ? Time.now : date + 0.5)
       time_lag = (instances_date.to_date - date).to_i
       enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
