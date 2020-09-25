@@ -6,7 +6,6 @@ require_relative './models/project_factory'
 
 def all_projects(date, slack, rerun)
   ProjectFactory.new().all_projects_as_type.each do |project|
-    project.record_instance_logs(rerun)
     project.get_cost_and_usage(date, slack, rerun)
     #project.each_instance_usage_data
     #project.get_instance_usage_data("i-062dd1030e63f9cff")
@@ -37,7 +36,6 @@ if ARGV[0] && ARGV[0] != "all"
     return
   end
   project = ProjectFactory.new().as_type(project)
-  project.record_instance_logs
   project.get_cost_and_usage(date, slack, rerun)
 else
   all_projects(date, slack, rerun)

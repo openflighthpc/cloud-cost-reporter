@@ -35,13 +35,27 @@ This application makes use of a number of AWS sdks, which require a valid `Acces
 
 ### Azure
 
-tbd
+In this application, Azure projects are assumed to be confined to a single Azure resource group (to be specified at project creation). In addition, it is required that compute nodes be given the `"type" => "compute"` tag on the Azure platform.
+
+The point at which tags are added does not affect the data pulled from the Azure API. As long as the resources that you want to analyse have the tag, the detail objects associated with that resource will be queried.
+
+In order to run the application, an app and service principal must be created in Azure Active Directory (see https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal for more details). The app must have at least `Reader` level permissions given to it in the subscription you wish to use it in, via the `Access control (IAM)` blade.
+
+Azure projects require the following details to be obtained prior to project creation:
+
+- Directory (tenant) ID
+- Client (application) ID
+- Client secret
+- Subscription ID
+- Resource group name
+
+The first three can be obtained via the app you created in Azure Active Directory. The subscription ID is located in the overview for the subscription containing the project; as is the resource group name in the overview for the resource group.
 
 ### Slack
 
 The application includes the option to send results to slack, specifying a specific channel for each project. To use this function, a slack bot (https://slack.com/apps/A0F7YS25R-bots) must be created. The bot's API Token should then be used to set an environment variable:
 
-`API_KEY=yourtoken ruby -e 'p ENV["API_KEY"]'`
+`SLACK_TOKEN=yourtoken ruby -e 'p ENV["SLACK_TOKEN"]'`
 
 This bot must be invited to each project's chosen slack channel.
 
