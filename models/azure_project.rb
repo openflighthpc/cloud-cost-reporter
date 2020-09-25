@@ -1,9 +1,12 @@
+require 'httparty'
 require_relative 'project'
-require 'pp'
 
 class AzureProject < Project
+  @@prices = {}
+
   after_initialize :construct_metadata
   after_initialize :refresh_auth_token
+
   def tenant_id
     @metadata['tenant_id']
   end
@@ -28,6 +31,10 @@ class AzureProject < Project
     @metadata['bearer_expiry']
   end
 
+  def location
+    @metadata['location']
+  end
+
   def today_compute_nodes
     @today_compute_nodes ||= api_query_compute_nodes
   end
@@ -40,7 +47,7 @@ class AzureProject < Project
     @metadata['resource_group']
   end
 
-  def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
+  def daily_report(date=Date.today-2, slack=true, rerun=false)
     record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
     cost_log = cost_logs.find_by(date: date.to_s)
 
@@ -49,7 +56,7 @@ class AzureProject < Project
     cached = total_cost_log && !rerun
 
     if !total_cost_log || !compute_cost_log || rerun
-      response = api_query_daily_cost(date)
+      response = api_query_cost(date)
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
       # Cost Analysis page (under 'Actual Cost') for the period selected.
@@ -116,6 +123,101 @@ class AzureProject < Project
     puts "_" * 50
   end
 
+  def weekly_report(date=Date.today - 2, slack=true, rerun=false)
+    report = self.weekly_report_logs.find_by(date: date)
+    msg = ""
+    if report == nil || rerun
+      record_instance_logs(rerun)
+      usage = get_overall_usage((date == Date.today - 2 ? Date.today : date), true)
+
+      start_date = Date.parse(self.start_date)
+      if date < start_date
+        puts "Given date is before the project start date"
+        return
+      elsif date > Date.today
+        puts "Given date is in the future"
+        return
+      end
+      start_date = start_date > date.beginning_of_month ? start_date : date.beginning_of_month
+      costs_this_month = api_query_cost(start_date, date)
+      total_costs = begin
+                     costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
+                   rescue NoMethodError
+                     0.0
+                   end
+      total_costs = (total_costs * 10 * 1.25).ceil
+
+      compute_nodes = self.instance_logs.where(compute: 1).where('timestamp LIKE ?', "%#{start_date.to_s[0..6]}%")
+      compute_costs_this_month = costs_this_month.select { |cd| compute_nodes.any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      compute_costs = begin
+                     compute_costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
+                   rescue NoMethodError
+                     0.0
+                   end
+      compute_costs = (compute_costs * 10 * 1.25).ceil
+
+      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
+      update_prices
+      future_costs = 0.0
+      logs.each do |log|
+        if log.status.downcase == 'available'
+          type = log.instance_type.gsub("Standard_", "").gsub("_", " ")
+          future_costs += @@prices[self.location][type][0]
+        end
+      end
+      daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
+      total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
+
+      remaining_budget = self.budget.to_i - total_costs
+      remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == Date.today - 2 ? Time.now : date + 0.5)
+      time_lag = (instances_date.to_date - date).to_i
+      enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
+      date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
+      date_warning = date > Date.today - 2 ? "\nWarning: data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
+
+      msg = [
+      "#{date_warning if date_warning}",
+      ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
+      "*Monthly Budget:* #{self.budget} compute units",
+      "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
+      "*Total Costs for #{date_range}:* #{total_costs} compute units",
+      "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
+      "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
+      "Currently, the cluster compute nodes are:",
+      "`#{usage}`\n",
+      "The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.",
+      "Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day.\n",
+      "The total estimated requirement is therefore *#{total_future_cu}* compute units per day.\n",
+      "*Predicted Usage*"
+      ]
+
+      if remaining_budget < 0
+        msg << ":awooga:The monthly budget *has been exceeded*:awooga:."
+      else
+        msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days."
+        msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      end
+      if remaining_budget < 0 || !enough
+        excess = remaining_budget - (total_future_cu * (date.end_of_month.day - date.day))
+        msg << "Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
+      end
+      msg = msg.join("\n") + "\n"
+
+      if report && rerun
+        report.update(content: msg, timestamp: Time.now)
+        report.save!
+      else
+        WeeklyReportLog.create(project_id: self.id, content: msg, date: date, timestamp: Time.now)
+      end
+    else
+      msg = "\t\t\t\t\t*Cached Report*\n" << report.content
+    end
+    send_slack_message(msg) if slack
+    puts (msg.gsub(":calendar:", "").gsub("*", "").gsub(":awooga:", ""))
+    puts '_' * 50
+  end
+
   def record_instance_logs(rerun=false)
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
@@ -142,12 +244,12 @@ class AzureProject < Project
     end
   end
 
-  def get_overall_usage(date)
+  def get_overall_usage(date, customer_facing=false)
     logs = self.instance_logs.where('timestamp LIKE ?', "%#{date}%").where(compute: 1)
 
     instance_counts = {}
     logs.each do |log|
-      type = log.instance_type
+      type = customer_facing ? log.customer_facing_type : log.instance_type
       if !instance_counts.has_key?(type)
         instance_counts[type] = {log.status => 1, "total" => 1}
       else
@@ -190,11 +292,11 @@ class AzureProject < Project
     end
   end
 
-  def api_query_daily_cost(date)
+  def api_query_cost(start_date, end_date=start_date)
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails"
     query = {
       'api-version': '2019-10-01',
-      '$filter': "properties/usageStart eq '#{date.to_s}' and properties/usageEnd eq '#{date.to_s}' and properties/resourceGroup eq '#{resource_group}'"
+      '$filter': "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}' and properties/resourceGroup eq '#{resource_group}'"
     }
     response = HTTParty.get(
       uri,
@@ -258,6 +360,32 @@ class AzureProject < Project
     end
   end
 
+  def get_prices
+    timestamp = Date.parse(File.open('azure_prices.txt').first) rescue false
+    if timestamp == false || Date.today - timestamp >= 1
+      update_bearer_token
+      uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
+      response = HTTParty.get(
+        uri,
+        headers: { 'Authorization': "Bearer #{bearer_token}" }
+      )
+
+      if response.success?
+        File.write('azure_prices.txt', "#{Time.now}\n")
+        response['Meters'].each do |meter|
+          if meter['MeterRegion'].include?('UK') && meter['MeterCategory'] == "Virtual Machines" &&
+            !meter['MeterName'].downcase.include?('low priority') &&
+            !meter["MeterSubCategory"].downcase.include?("windows")
+            File.write("azure_prices.txt", meter.to_json, mode: "a")
+            File.write("azure_prices.txt", "\n", mode: "a")
+          end
+        end
+      else
+        puts "Error obtaining latest azure price list. Error code #{response.code}."
+      end
+    end
+  end
+
   private
 
   def refresh_auth_token
@@ -272,4 +400,25 @@ class AzureProject < Project
     @metadata = JSON.parse(metadata)
   end
 
+  def update_prices
+    #don't need to get again if another project has already added prices for the same location
+    return if @@prices.has_key?(self.location)
+
+    get_prices
+    File.open('azure_prices.txt').each_with_index do |entry, index|
+      if index != 0
+        entry = JSON.parse(entry)
+        instance_type = entry['MeterName']
+        if !@@prices.has_key?(self.location)
+          @@prices[self.location] = {}
+        end
+
+        if !@@prices[self.location].has_key?(instance_type) ||
+          (@@prices[self.location].has_key?(instance_type) &&
+          Date.parse(entry['EffectiveDate']) > @@prices[self.location][instance_type][1])
+          @@prices[self.location][instance_type] = [entry['MeterRates']["0"].to_f, Date.parse(entry['EffectiveDate'])]
+        end
+      end
+    end
+  end
 end

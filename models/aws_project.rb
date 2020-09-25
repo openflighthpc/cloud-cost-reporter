@@ -43,7 +43,7 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def get_cost_and_usage(date=(Date.today - 2), slack=true, rerun=false)
+  def daily_report(date=(Date.today - 2), slack=true, rerun=false)
     start_date = Date.parse(self.start_date)
     if date < start_date
       puts "Given date is before the project start date"
@@ -124,7 +124,7 @@ class AwsProject < Project
       logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
       future_costs = 0.0
       logs.each do |log|
-        if log.status == "running"
+        if log.status.downcase == "running"
           future_costs += @@prices[self.region][log.instance_type]
         end
       end
@@ -133,7 +133,7 @@ class AwsProject < Project
 
       remaining_budget = self.budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : date + 0.5
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == Date.today - 2 ? Time.now : date + 0.5)
       time_lag = (instances_date.to_date - date).to_i
       enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
@@ -163,7 +163,7 @@ class AwsProject < Project
         msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
       end
       if remaining_budget < 0 || !enough
-        excess = (total_future_cu * date.end_of_month.day - (date).day)
+        excess = remaining_budget - (total_future_cu * (date.end_of_month.day - date.day))
         msg << "Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
       end
 
