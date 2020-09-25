@@ -1,4 +1,5 @@
 require 'active_record'
+require 'httparty'
 require_relative 'weekly_report_log'
 require_relative 'cost_log'
 require_relative 'instance_log'

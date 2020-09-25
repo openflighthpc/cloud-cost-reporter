@@ -1,5 +1,4 @@
 require 'json'
-require 'httparty'
 require 'date'
 require 'sqlite3'
 require_relative './models/project_factory'

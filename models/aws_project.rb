@@ -124,7 +124,7 @@ class AwsProject < Project
       logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
       future_costs = 0.0
       logs.each do |log|
-        if log.status == "running"
+        if log.status.downcase == "running"
           future_costs += @@prices[self.region][log.instance_type]
         end
       end

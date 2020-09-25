@@ -19,6 +19,7 @@ def add_or_update_project(action=nil)
     puts "start_date: #{project.start_date}"
     puts "end_date: #{project.end_date}"
     puts "budget: #{project.budget}"
+    puts "region: #{project.region}"
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
     update_attributes(project)
@@ -90,6 +91,8 @@ def add_project
 
   metadata = {}
   if attributes[:host].downcase == "aws"
+    print "Region (e.g. eu-west-2: "
+    attributes["region"] = gets.chomp
     print "Access Key Id: "
     metadata["access_key_ident"] = gets.chomp
     print "Secret Access Key: "
@@ -99,6 +102,8 @@ def add_project
     print "Filtering level (tag/account): "
     metadata["filter_level"] = gets.chomp
   else
+    print "Location (e.g. UK South): "
+    metadata["location"] = gets.chomp
     print "Tenant Id: "
     metadata["tenant_id"] = gets.chomp
     print "Azure Client Id: "

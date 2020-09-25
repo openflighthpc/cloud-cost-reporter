@@ -1,12 +1,12 @@
+require 'httparty'
 require_relative 'project'
-require 'pp'
 
 class AzureProject < Project
   @@prices = {}
 
   after_initialize :construct_metadata
   after_initialize :refresh_auth_token
-  
+
   def tenant_id
     @metadata['tenant_id']
   end
@@ -29,6 +29,10 @@ class AzureProject < Project
 
   def bearer_expiry
     @metadata['bearer_expiry']
+  end
+
+  def location
+    @metadata['location']
   end
 
   def today_compute_nodes
@@ -153,8 +157,10 @@ class AzureProject < Project
       update_prices
       future_costs = 0.0
       logs.each do |log|
-        type = log.instance_type.gsub("Standard_", "").gsub("_", " ")
-        future_costs += @@prices[type][0]
+        if log.status.downcase == 'available'
+          type = log.instance_type.gsub("Standard_", "").gsub("_", " ")
+          future_costs += @@prices[self.location][type][0]
+        end
       end
       daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
@@ -349,7 +355,8 @@ class AzureProject < Project
   end
 
   def get_prices
-    if @@prices = {}
+    timestamp = Date.parse(File.open('azure_prices.txt').first) rescue false
+    if timestamp == false || Date.today - timestamp >= 1
       update_bearer_token
       uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
       response = HTTParty.get(
@@ -357,16 +364,15 @@ class AzureProject < Project
         headers: { 'Authorization': "Bearer #{bearer_token}" }
       )
 
-      File.write('azure_prices.txt', "")
+      File.write('azure_prices.txt', "#{Time.now}\n")
       response['Meters'].each do |meter|
-        if meter['MeterRegion'] == 'UK South' && meter['MeterCategory'] == "Virtual Machines" &&
+        if meter['MeterRegion'].include?('UK') && meter['MeterCategory'] == "Virtual Machines" &&
           !meter['MeterName'].downcase.include?('low priority') &&
           !meter["MeterSubCategory"].downcase.include?("windows")
           File.write("azure_prices.txt", meter.to_json, mode: "a")
           File.write("azure_prices.txt", "\n", mode: "a")
         end
       end
-      update_prices
     end
   end
 
@@ -385,11 +391,23 @@ class AzureProject < Project
   end
 
   def update_prices
-    File.open('azure_prices.txt').each do |entry|
-      entry = JSON.parse(entry)
-      if @@prices[entry['MeterName']] == nil || 
-        Date.parse(entry['EffectiveDate']) > @@prices[entry['MeterName']][1] 
-        @@prices[entry['MeterName']] = [entry['MeterRates']["0"].to_f, Date.parse(entry['EffectiveDate'])]
+    #don't need to get again if another project has already added prices for the same location
+    return if @@prices.has_key?(self.location)
+
+    get_prices
+    File.open('azure_prices.txt').each_with_index do |entry, index|
+      if index != 0
+        entry = JSON.parse(entry)
+        instance_type = entry['MeterName']
+        if !@@prices.has_key?(self.location)
+          @@prices[self.location] = {}
+        end
+
+        if !@@prices[self.location].has_key?(instance_type) ||
+          (@@prices[self.location].has_key?(instance_type) &&
+          Date.parse(entry['EffectiveDate']) > @@prices[self.location][instance_type][1])
+          @@prices[self.location][instance_type] = [entry['MeterRates']["0"].to_f, Date.parse(entry['EffectiveDate'])]
+        end
       end
     end
   end
