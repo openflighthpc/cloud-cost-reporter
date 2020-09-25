@@ -199,7 +199,7 @@ class AzureProject < Project
         msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
       end
       if remaining_budget < 0 || !enough
-        excess = (total_future_cu * date.end_of_month.day - (date).day)
+        excess = remaining_budget - (total_future_cu * (date.end_of_month.day - date.day))
         msg << "Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
       end
       msg = msg.join("\n") + "\n"
