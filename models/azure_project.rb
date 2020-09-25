@@ -288,9 +288,9 @@ class AzureProject < Project
       vms = response['value']
       vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' }
     else
-      raise AzureApiError.new("Error querying compute nodes for project #{name}/#{resource_group}.\
-                              Error code #{response.code}.\
-                              #{response if $verbose}"
+      raise AzureApiError.new("Error querying compute nodes for project #{name}/#{resource_group}.\n
+                              Error code #{response.code}.\n
+                              #{response if $verbose}")
     end
   end
 
@@ -309,9 +309,9 @@ class AzureProject < Project
     if response.success?
       details = response['value']
     else
-      raise AzureApiError.new("Error querying daily cost Azure API for project #{name}/#{resource_group}.\
-                          Error code #{response.code}.\
-                          #{response if $verbose}"
+      raise AzureApiError.new("Error querying daily cost Azure API for project #{name}/#{resource_group}.\n
+                          Error code #{response.code}.\n
+                          #{response if $verbose}")
     end
   end
 
@@ -335,9 +335,9 @@ class AzureProject < Project
         end
       end
     else
-      raise AzureApiError.new("Error querying node status Azure API for project #{name}/#{resource_group}.\
-                              Error code #{response.code}.\
-                              #{response if $verbose}"
+      raise AzureApiError.new("Error querying node status Azure API for project #{name}/#{resource_group}.\n
+                              Error code #{response.code}.\n
+                              #{response if $verbose}")
     end
   end
 
@@ -362,9 +362,9 @@ class AzureProject < Project
       self.metadata = @metadata.to_json
       self.save
     else
-      raise AzureApiError.new("Error obtaining new authorization token for project #{name}/#{resource_group}.\
-                              Error code #{response.code}/\
-                              #{response if $verbose}"
+      raise AzureApiError.new("Error obtaining new authorization token for project #{name}/#{resource_group}.\n
+                              Error code #{response.code}/\n
+                              #{response if $verbose}")
     end
   end
 
@@ -389,7 +389,8 @@ class AzureProject < Project
           end
         end
       else
-        puts "Error obtaining latest azure price list. Error code #{response.code}."
+        raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n
+                                #{response if $verbose}")
       end
     end
   end
