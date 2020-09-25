@@ -47,7 +47,7 @@ class AzureProject < Project
     @metadata['resource_group']
   end
 
-  def get_cost_and_usage(date=Date.today-2, slack=true, rerun=false)
+  def daily_report(date=Date.today-2, slack=true, rerun=false)
     record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
     cost_log = cost_logs.find_by(date: date.to_s)
 

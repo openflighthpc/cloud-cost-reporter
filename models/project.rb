@@ -46,7 +46,7 @@ class Project < ActiveRecord::Base
     Date.parse(self.end_date) > Date.today
   end
 
-  def get_cost_and_usage(date=Date.today - 2, slack=true, rerun=false)
+  def daily_report(date=Date.today - 2, slack=true, rerun=false)
   end
 
   def get_forecasts

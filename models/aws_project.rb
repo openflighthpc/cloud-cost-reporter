@@ -43,7 +43,7 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def get_cost_and_usage(date=(Date.today - 2), slack=true, rerun=false)
+  def daily_report(date=(Date.today - 2), slack=true, rerun=false)
     start_date = Date.parse(self.start_date)
     if date < start_date
       puts "Given date is before the project start date"
