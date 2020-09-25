@@ -97,7 +97,7 @@ class AwsProject < Project
     if report == nil || rerun
       record_instance_logs(rerun)
       get_latest_prices
-      usage = get_overall_usage(date == Date.today - 2 ? Date.today : date)
+      usage = get_overall_usage(date == Date.today - 2 ? Date.today : date, true)
 
       start_date = Date.parse(self.start_date)
       if date < start_date
