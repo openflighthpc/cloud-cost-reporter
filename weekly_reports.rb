@@ -3,10 +3,10 @@ require 'date'
 require 'sqlite3'
 require_relative './models/project_factory'
 
-def all_projects(date, slack, rerun)
+def all_projects(date, slack, rerun, verbose)
   ProjectFactory.new().all_projects_as_type.each do |project|
     begin
-      project.weekly_report(date, slack, rerun)
+      project.weekly_report(date, slack, rerun, verbose)
     rescue AzureApiError => e
       puts e
       next
@@ -18,9 +18,10 @@ date = Date.today - 2
 project = nil
 rerun = ARGV.include?("rerun")
 slack = !ARGV.include?("text")
+verbose = false
 if ARGV.include?("verbose")
   ARGV.delete("verbose")
-  $verbose = true
+  verbose = true
 end
 
 if ARGV[1] && ARGV[1] != "latest"
@@ -41,11 +42,11 @@ if ARGV[0] && ARGV[0] != "all"
   begin
     project = ProjectFactory.new().as_type(project)
     project.get_prices
-    project.weekly_report(date, slack, rerun)
+    project.weekly_report(date, slack, rerun, verbose)
   rescue AzureApiError => e
     puts e
     next
   end
 else
-  all_projects(date, slack, rerun)
+  all_projects(date, slack, rerun, verbose)
 end

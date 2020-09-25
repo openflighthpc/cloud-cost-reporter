@@ -290,7 +290,7 @@ class AzureProject < Project
     else
       raise AzureApiError.new("Error querying compute nodes for project #{name}/#{resource_group}.\n
                               Error code #{response.code}.\n
-                              #{response if $verbose}")
+                              #{response if verbose}")
     end
   end
 
@@ -311,7 +311,7 @@ class AzureProject < Project
     else
       raise AzureApiError.new("Error querying daily cost Azure API for project #{name}/#{resource_group}.\n
                           Error code #{response.code}.\n
-                          #{response if $verbose}")
+                          #{response if verbose}")
     end
   end
 
@@ -337,7 +337,7 @@ class AzureProject < Project
     else
       raise AzureApiError.new("Error querying node status Azure API for project #{name}/#{resource_group}.\n
                               Error code #{response.code}.\n
-                              #{response if $verbose}")
+                              #{response if verbose}")
     end
   end
 
@@ -364,7 +364,7 @@ class AzureProject < Project
     else
       raise AzureApiError.new("Error obtaining new authorization token for project #{name}/#{resource_group}.\n
                               Error code #{response.code}/\n
-                              #{response if $verbose}")
+                              #{response if verbose}")
     end
   end
 
@@ -390,7 +390,7 @@ class AzureProject < Project
         end
       else
         raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n
-                                #{response if $verbose}")
+                                #{response if verbose}")
       end
     end
   end
