@@ -49,75 +49,21 @@ class AwsProject < Project
     if date < start_date
       puts "Given date is before the project start date"
       return
+    elsif date > Date.today
+      puts "Given date is in the future"
+      return
     end
 
     record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
-    compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
+    
+    cached = !rerun && self.cost_logs.find_by(date: date.to_s, scope: "total")
 
-    # only make query if don't already have data in logs or asked to recalculate
-    if !compute_cost_log || rerun
-      compute_instance_costs = @explorer.get_cost_and_usage(cost_query(date)).results_by_time[0][:groups]
-      compute_cost = 0
-      compute_instance_costs.each do |instance|
-        compute_cost += instance[:metrics]["UnblendedCost"][:amount].to_f
-      end
-      
-      if rerun && compute_cost_log
-        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
-        compute_cost_log.save!
-      else
-        compute_cost_log = CostLog.create(
-          project_id: self.id,
-          cost: compute_cost,
-          currency: "USD",
-          date: date.to_s,
-          scope: "compute",
-          timestamp: Time.now.to_s
-        )
-      end
-    end
-
-    data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
-    # only make query if don't already have data in logs or asked to recalculate
-    if !data_out_cost_log || rerun
-      data_out_cost = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
-      if data_out_cost_log && rerun
-        data_out_cost_log.assign_attributes(cost: data_out_cost, timestamp: Time.now.to_s)
-        data_out_cost_log.save!
-      else
-        data_out_cost_log = CostLog.create(
-          project_id: self.id,
-          cost: data_out_cost,
-          currency: "USD",
-          date: date.to_s,
-          scope: "data_out",
-          timestamp: Time.now.to_s
-        )
-      end
-    end
-
-    total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
-    cached = total_cost_log && !rerun
-    # only make query if don't already have data in logs or asked to recalculate
-    if !total_cost_log || rerun
-      daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
-      if total_cost_log && rerun
-        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
-        total_cost_log.save!
-      else
-        total_cost_log = CostLog.create(
-          project_id: self.id,
-          cost: daily_cost,
-          currency: "USD",
-          date: date.to_s,
-          scope: "total",
-          timestamp: Time.now.to_s
-        )
-      end
-    end
-
+    compute_cost_log = get_compute_costs(date, rerun)
+    data_out_cost_log, data_out_amount_log = get_data_out_figures(date, rerun)
+    total_cost_log = get_total_costs(date, rerun)
     overall_usage = get_overall_usage(date)
-    usage_breakdown = get_usage_hours_by_instance_type(date)
+    usage_breakdown = get_usage_hours_by_instance_type(date, rerun)
+
     date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
     msg = [
@@ -127,6 +73,7 @@ class AwsProject < Project
       "*Compute Costs (USD):* #{compute_cost_log.cost.to_f.ceil(2)}",
       "*Compute Units (Flat):* #{compute_cost_log.compute_cost}",
       "*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n",
+      "*Data Out (GB):* #{data_out_amount_log.amount.to_f.ceil(4)}",
       "*Data Out Costs (USD):* #{data_out_cost_log.cost.to_f.ceil(2)}",
       "*Compute Units (Flat):* #{data_out_cost_log.compute_cost}",
       "*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n",
@@ -151,20 +98,29 @@ class AwsProject < Project
     if report == nil || rerun
       record_instance_logs(rerun)
       get_latest_prices
-      usage = get_overall_usage(Date.today, true)
+      usage = get_overall_usage(date == Date.today - 2 ? Date.today : date)
 
       start_date = Date.parse(self.start_date)
       if date < start_date
         puts "Given date is before the project start date"
         return
+      elsif date > Date.today
+        puts "Given date is in the future"
+        return
       end
       start_date = start_date > date.beginning_of_month ? start_date : date.beginning_of_month
+      compute_costs_this_month = @explorer.get_cost_and_usage(compute_cost_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
+      compute_costs = compute_costs_this_month.total["UnblendedCost"][:amount].to_f
+      compute_costs = (compute_costs * 10 * 1.25).ceil
+
+      data_egress_this_month = @explorer.get_cost_and_usage(data_out_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
+      data_egress_amount = data_egress_this_month.total["UsageQuantity"][:amount].to_f.ceil(2)
+      data_egress_costs = data_egress_this_month.total["UnblendedCost"][:amount].to_f
+      data_egress_costs = (data_egress_costs * 10 * 1.25).ceil
+
       costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
       total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
       total_costs = (total_costs * 10 * 1.25).ceil
-      data_egress_this_month = @explorer.get_cost_and_usage(data_out_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
-      data_egress_costs = data_egress_this_month.total["UnblendedCost"][:amount].to_f
-      data_egress_costs = (data_egress_costs * 10 * 1.25).ceil
 
       logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
       future_costs = 0.0
@@ -178,9 +134,9 @@ class AwsProject < Project
 
       remaining_budget = self.budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : Time.now
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : date + 0.5
       time_lag = (instances_date.to_date - date).to_i
-      enough = date + remaining_days + time_lag >= (date << 1).beginning_of_month
+      enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
       date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
@@ -188,7 +144,8 @@ class AwsProject < Project
       "#{date_warning if date_warning}",
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
       "*Monthly Budget:* #{self.budget} compute units",
-      "*Data Egress Costs for #{date_range}:* #{data_egress_costs} compute units",
+      "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
+      "*Data Egress Costs for #{date_range}:* #{data_egress_costs} compute units (#{data_egress_amount} GB)",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
       "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
       "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
@@ -201,12 +158,16 @@ class AwsProject < Project
       ]
 
       if remaining_budget < 0
-        excess = (total_future_cu * date.end_of_month.day - (date).day)
-        msg << ":awooga:The monthly budget *has been exceeded*:awooga:. Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
+        msg << ":awooga:The monthly budget *has been exceeded*:awooga:."
       else
         msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days."
         msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
       end
+      if remaining_budget < 0 || !enough
+        excess = (total_future_cu * date.end_of_month.day - (date).day)
+        msg << "Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
+      end
+
       msg = msg.join("\n") + "\n"
 
       if report && rerun
@@ -233,6 +194,94 @@ class AwsProject < Project
         @@prices[self.region][instance_type] = get_cost_per_hour(instance_type)
       end
     end
+  end
+
+  def get_compute_costs(date, rerun)
+    compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
+
+    # only make query if don't already have data in logs or asked to recalculate
+    if !compute_cost_log || rerun
+      compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
+      if rerun && compute_cost_log
+        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
+        compute_cost_log.save!
+      else
+        compute_cost_log = CostLog.create(
+          project_id: self.id,
+          cost: compute_cost,
+          currency: "USD",
+          date: date.to_s,
+          scope: "compute",
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    compute_cost_log
+  end
+
+  def get_data_out_figures(date, rerun)
+    data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
+    data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")
+    data_out_figures = nil
+    # only make query if don't already have data in logs or asked to recalculate
+    if !data_out_cost_log || !data_out_amount_log || rerun
+      data_out_figures = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0]
+      data_out_cost = data_out_figures.total["UnblendedCost"][:amount]
+      data_out_amount = data_out_figures.total["UsageQuantity"][:amount]
+      
+      if data_out_cost_log && rerun
+        data_out_cost_log.assign_attributes(cost: data_out_cost, timestamp: Time.now.to_s)
+        data_out_cost_log.save!
+      else
+        data_out_cost_log = CostLog.create(
+          project_id: self.id,
+          cost: data_out_cost,
+          currency: "USD",
+          date: date.to_s,
+          scope: "data_out",
+          timestamp: Time.now.to_s
+        )
+      end
+
+      if data_out_amount_log && rerun
+        data_out_amount_log.assign_attributes(amount: data_out_amount, timestamp: Time.now.to_s)
+        data_out_amount_log.save!
+      else
+        data_out_amount_log = UsageLog.create(
+          project_id: self.id,
+          amount: data_out_amount,
+          unit: "GB",
+          start_date: date.to_s,
+          end_date: (date + 1).to_s,
+          description: "data_out",
+          scope: "project",
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    return data_out_cost_log, data_out_amount_log
+  end
+
+  def get_total_costs(date, rerun)
+    total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
+    # only make query if don't already have data in logs or asked to recalculate
+    if !total_cost_log || rerun
+      daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+      if total_cost_log && rerun
+        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
+        total_cost_log.save!
+      else
+        total_cost_log = CostLog.create(
+          project_id: self.id,
+          cost: daily_cost,
+          currency: "USD",
+          date: date.to_s,
+          scope: "total",
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    total_cost_log
   end
 
   def get_cost_per_hour(resource_name)
@@ -284,13 +333,32 @@ class AwsProject < Project
     overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
-  def get_usage_hours_by_instance_type(date=(Date.today - 2))
-    usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
-    usage_by_instance_type
+  def get_usage_hours_by_instance_type(date=(Date.today - 2), rerun)
+    logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: date).where(end_date: date + 1)
+    logs.delete_all if rerun
     usage_breakdown = "\n\t\t\t\t"
+    if !logs.any?
+      usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
 
-    usage_by_instance_type.results_by_time[0].groups.each do |group|
-      usage_breakdown << "#{group[:keys][0]}: #{group[:metrics]["UsageQuantity"][:amount].to_f.round(2)} hours \n\t\t\t\t"
+      usage_by_instance_type.results_by_time[0].groups.each do |group|
+        instance_type = group[:keys][0]
+        amount = group[:metrics]["UsageQuantity"][:amount].to_f.round(2)
+        usage_breakdown << "#{instance_type}: #{amount} hours \n\t\t\t\t"
+        UsageLog.create(
+          project_id: self.id,
+          description: instance_type,
+          amount: amount,
+          unit: "hours",
+          scope: "compute",
+          start_date: date,
+          end_date: date + 1,
+          timestamp: Time.now
+        )
+      end
+    else
+      logs.each do |log|
+        usage_breakdown = "#{log.description}: #{log.amount} hours \n\t\t\t\t"
+      end
     end
 
     usage_breakdown == "\n\t\t\t\t" ? "None" : usage_breakdown
@@ -380,7 +448,7 @@ class AwsProject < Project
     }
   end
 
-  def cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
+  def compute_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
     {
       time_period: {
         start: start_date.to_s,
