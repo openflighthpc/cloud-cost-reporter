@@ -71,7 +71,7 @@ An 'InstanceMapping' object can be created for adding a customer friendly name (
 
 Base compute units are calculated as 10 * the GBP cost. For costs received in USD (i.e. from AWS), the default exchange rate of $1 = £0.77 is used. This can be overriden using an environment variable, replacing 0.77 with the desired, more up to date value:
 
- `USD_CONVERSION=new_value ruby -e 'p ENV["USD_CONVERSION"]'`
+ `USD_GBP_CONVERSION=new_value ruby -e 'p ENV["USD_GBP_CONVERSION"]'`
 
 # Operation
 
