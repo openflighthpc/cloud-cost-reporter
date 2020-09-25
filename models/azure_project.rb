@@ -296,7 +296,7 @@ class AzureProject < Project
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails"
     query = {
       'api-version': '2019-10-01',
-      '$filter': "properties/usageStart eq '#{start_date.to_s}' and properties/usageEnd eq '#{end_date.to_s}' and properties/resourceGroup eq '#{resource_group}'"
+      '$filter': "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}' and properties/resourceGroup eq '#{resource_group}'"
     }
     response = HTTParty.get(
       uri,
