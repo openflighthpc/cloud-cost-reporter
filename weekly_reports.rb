@@ -41,7 +41,6 @@ if ARGV[0] && ARGV[0] != "all"
   end
   begin
     project = ProjectFactory.new().as_type(project)
-    project.get_prices
     project.weekly_report(date, slack, rerun, verbose)
   rescue AzureApiError => e
     puts e

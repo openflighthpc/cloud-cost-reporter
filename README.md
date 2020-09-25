@@ -67,6 +67,12 @@ A `Project` object should be created for each project you wish to track. These c
 
 An 'InstanceMapping' object can be created for adding a customer friendly name (e.g. "Compute (Large)"") for an AWS or Azure instance type (e.g. "c5.xlarge" or "Standard_F4s_v2"). These can be created by running `ruby manage_instance_mappings.rb` and following the prompts in the command line. This file can also be used to update or delete existing mappings. Customer friendly names are currently used for describing compute nodes in weekly reports. If no mapping is found for that instance type, 'Compute (other)' is used.
 
+### Currency and compute unit conversion
+
+Base compute units are calculated as 10 * the GBP cost. For costs received in USD (i.e. from AWS), the default exchange rate of $1 = £0.77 is used. This can be overriden using an environment variable, replacing 0.77 with the desired, more up to date value:
+
+ `USD_GBP_CONVERSION=new_value ruby -e 'p ENV["USD_GBP_CONVERSION"]'`
+
 # Operation
 
 The application includes functionality for generating both daily and weekly reports of cloud usage and cost data. The obtained data is saved in the database and, unless specified, queries where an existing report exists will use stored data instead of making fresh sdk/api calls.
@@ -82,7 +88,28 @@ Both of these files also take up to 4 arguments:
 3 (optional & unordered): 'slack' or 'text'. If text no message will be sent to slack\
 4 (optional & unordered): 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
 
-For example 'ruby daily_reports.rb project1 2020-09-01 rerun' will generate the report for a project called 'project1', with data from the 1st September 2020, using fresh sdk/api calls, posting to slack and printing to the terminal.
+## Examples
+
+To get all projects' reports with cost data from two days ago, with slack messaging, using cached data if present:
+
+`ruby daily_reports.rb` or `ruby daily_reports.rb all latest`
+`ruby weekly_reports.rb` or `ruby weekly_reports.rb all latest`
+
+To get a report for a specific project, with cost data from two days ago, with only text output and using cached data if present:
+
+`ruby daily_reports.rb projectName latest text`
+`ruby weekly_reports.rb projectName latest text`
+
+To get a report for a specific project for a specific date, with slack output and using cached data if present
+
+`ruby daily_reports.rb projectName 2020-09-20`
+`ruby weekly_reports.rb projectName 2020-09-20`
+
+To get all projects' reports for a specific day, with only text output and fresh cost and usage queries
+
+`ruby daily_reports.rb all 2020-09-20 text rerun`
+`ruby weekly_reports.rb all 2020-09-20 text rerun`
+
 
 A 'verbose' flag is also optional at the command line. Including it will expand any brief errors to include further debug information. For Azure, this means including the full HTTP response from the Azure API instead of just the error code.
 
