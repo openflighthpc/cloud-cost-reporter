@@ -8,7 +8,7 @@ def all_projects(date, slack, rerun)
     begin
       project.daily_report(date, slack, rerun)
     rescue AzureApiError => e
-      puts e.msg
+      puts e.message
       next
     end
   end
@@ -18,7 +18,10 @@ date = Date.today - 2
 project = nil
 rerun = ARGV.include?("rerun")
 slack = !ARGV.include?("text")
-$verbose = ARGV.include?("verbose")
+if ARGV.include?("verbose")
+  ARGV.delete("verbose")
+  $verbose = true
+end
 
 if ARGV[1] && ARGV[1] != "latest"
   valid = Date.parse(ARGV[1]) rescue false
@@ -36,7 +39,11 @@ if ARGV[0] && ARGV[0] != "all"
     return
   end
   project = ProjectFactory.new().as_type(project)
-  project.daily_report(date, slack, rerun)
+  begin
+    project.daily_report(date, slack, rerun)
+  rescue AzureApiError => e
+    puts e.msg
+  end
 else
   all_projects(date, slack, rerun)
 end

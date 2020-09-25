@@ -433,7 +433,4 @@ class AzureProject < Project
 end
 
 class AzureApiError < StandardError
-  def initialize(msg)
-    super(msg)
-  end
 end
