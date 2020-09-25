@@ -5,7 +5,12 @@ require_relative './models/project_factory'
 
 def all_projects(date, slack, rerun)
   ProjectFactory.new().all_projects_as_type.each do |project|
-    project.weekly_report(date, slack, rerun)
+    begin
+      project.weekly_report(date, slack, rerun)
+    rescue AzureApiError => e
+      puts e
+      next
+    end
   end
 end
 
@@ -13,6 +18,10 @@ date = Date.today - 2
 project = nil
 rerun = ARGV.include?("rerun")
 slack = !ARGV.include?("text")
+if ARGV.include?("verbose")
+  ARGV.delete("verbose")
+  $verbose = true
+end
 
 if ARGV[1] && ARGV[1] != "latest"
   valid = Date.parse(ARGV[1]) rescue false
@@ -29,9 +38,14 @@ if ARGV[0] && ARGV[0] != "all"
     puts "Project with that name not found"
     return
   end
-  project = ProjectFactory.new().as_type(project)
-  project.get_prices
-  project.weekly_report(date, slack, rerun)
+  begin
+    project = ProjectFactory.new().as_type(project)
+    project.get_prices
+    project.weekly_report(date, slack, rerun)
+  rescue AzureApiError => e
+    puts e
+    next
+  end
 else
   all_projects(date, slack, rerun)
 end
