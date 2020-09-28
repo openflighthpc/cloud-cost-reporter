@@ -93,21 +93,25 @@ Both of these files also take up to 4 arguments:
 To get all projects' reports with cost data from two days ago, with slack messaging, using cached data if present:
 
 `ruby daily_reports.rb` or `ruby daily_reports.rb all latest`
+
 `ruby weekly_reports.rb` or `ruby weekly_reports.rb all latest`
 
 To get a report for a specific project, with cost data from two days ago, with only text output and using cached data if present:
 
 `ruby daily_reports.rb projectName latest text`
+
 `ruby weekly_reports.rb projectName latest text`
 
 To get a report for a specific project for a specific date, with slack output and using cached data if present
 
 `ruby daily_reports.rb projectName 2020-09-20`
+
 `ruby weekly_reports.rb projectName 2020-09-20`
 
 To get all projects' reports for a specific day, with only text output and fresh cost and usage queries
 
 `ruby daily_reports.rb all 2020-09-20 text rerun`
+
 `ruby weekly_reports.rb all 2020-09-20 text rerun`
 
 
