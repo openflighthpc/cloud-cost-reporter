@@ -111,6 +111,8 @@ To get all projects' reports for a specific day, with only text output and fresh
 `ruby weekly_reports.rb all 2020-09-20 text rerun`
 
 
+A 'verbose' flag is also optional at the command line. Including it will expand any brief errors to include further debug information. For Azure, this means including the full HTTP response from the Azure API instead of just the error code.
+
 ### Recording Azure Pricing
 
 For the weekly report, future costs are estimated based on the active compute nodes and their daily costs, using pricing from AWS and Azure respectively. For Azure, the Ratecard api used here returns a very large list of prices, with extremely limited serverside filtering available. To prevent excessive waits for this request each time `weekly_reports.rb` is run, this price list is saved to a text file, `azure_prices.txt`. This includes a timestamp, and when generating Azure weekly reports, if less than a day old, the data is read directly from the file rather than making another api request.

@@ -47,7 +47,8 @@ class AzureProject < Project
     @metadata['resource_group']
   end
 
-  def daily_report(date=Date.today-2, slack=true, rerun=false)
+  def daily_report(date=Date.today-2, slack=true, rerun=false, verbose=false)
+    @verbose = verbose
     record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
     cost_log = cost_logs.find_by(date: date.to_s)
 
@@ -123,7 +124,8 @@ class AzureProject < Project
     puts "_" * 50
   end
 
-  def weekly_report(date=Date.today - 2, slack=true, rerun=false)
+  def weekly_report(date=Date.today - 2, slack=true, rerun=false, verbose=false)
+    @verbose = verbose
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
@@ -288,7 +290,9 @@ class AzureProject < Project
       vms = response['value']
       vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' }
     else
-      puts "Error querying compute nodes for project #{name}/#{resource_group}. Error code #{response.code}."
+      raise AzureApiError.new("Error querying compute nodes for project #{name}/#{resource_group}.\n
+                              Error code #{response.code}.\n
+                              #{response if @verbose}")
     end
   end
 
@@ -307,7 +311,9 @@ class AzureProject < Project
     if response.success?
       details = response['value']
     else
-      puts "Error querying daily cost Azure API for project #{name}/#{resource_group}. Error code #{response.code}."
+      raise AzureApiError.new("Error querying daily cost Azure API for project #{name}/#{resource_group}.\n
+                          Error code #{response.code}.\n
+                          #{response if @verbose}")
     end
   end
 
@@ -331,7 +337,9 @@ class AzureProject < Project
         end
       end
     else
-      puts "Error querying node status Azure API for project #{name}/#{resource_group}. Error code #{response.code}."
+      raise AzureApiError.new("Error querying node status Azure API for project #{name}/#{resource_group}.\n
+                              Error code #{response.code}.\n
+                              #{response if @verbose}")
     end
   end
 
@@ -356,7 +364,9 @@ class AzureProject < Project
       self.metadata = @metadata.to_json
       self.save
     else
-      puts "Error obtaining new authorization token for project #{name}. Error code #{response.code}."
+      raise AzureApiError.new("Error obtaining new authorization token for project #{name}/#{resource_group}.\n
+                              Error code #{response.code}/\n
+                              #{response if @verbose}")
     end
   end
 
@@ -381,7 +391,8 @@ class AzureProject < Project
           end
         end
       else
-        puts "Error obtaining latest azure price list. Error code #{response.code}."
+        raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n
+                                #{response if @verbose}")
       end
     end
   end
@@ -421,4 +432,7 @@ class AzureProject < Project
       end
     end
   end
+end
+
+class AzureApiError < StandardError
 end

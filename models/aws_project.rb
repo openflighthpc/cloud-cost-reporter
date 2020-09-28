@@ -43,7 +43,8 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def daily_report(date=(Date.today - 2), slack=true, rerun=false)
+  def daily_report(date=(Date.today - 2), slack=true, rerun=false, verbose=false)
+    @verbose = false
     start_date = Date.parse(self.start_date)
     if date < start_date
       puts "Given date is before the project start date"
@@ -91,7 +92,8 @@ class AwsProject < Project
     puts "_" * 50
   end
 
-  def weekly_report(date=Date.today - 2, slack=true, rerun=false)
+  def weekly_report(date=Date.today - 2, slack=true, rerun=false, verbose=false)
+    @verbose = false
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
