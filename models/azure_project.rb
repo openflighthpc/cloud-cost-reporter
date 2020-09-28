@@ -50,25 +50,20 @@ class AzureProject < Project
   def daily_report(date=Date.today-2, slack=true, rerun=false, verbose=false)
     @verbose = verbose
     record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
-    cost_log = cost_logs.find_by(date: date.to_s)
+    total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
+    data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
+    data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")
+    compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
-    total_cost_log = cost_logs.find_by(date: date.to_s, scope: "total")
-    compute_cost_log = cost_logs.find_by(date: date.to_s, scope: "compute")
     cached = total_cost_log && !rerun
+    response = nil
 
-    if !total_cost_log || !compute_cost_log || rerun
+    if rerun || !(total_cost_log && data_out_cost_log && data_out_amount_log && compute_cost_log)
       response = api_query_cost(date)
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
       # Cost Analysis page (under 'Actual Cost') for the period selected.
       daily_cost = begin
-                     response.map { |c| c['properties']['cost'] }.reduce(:+)
-                   rescue NoMethodError
-                     0.0
-                   end
-
-      response.select! { |cd| historic_compute_nodes(date).any? { |node| node.instance_name == cd['properties']['resourceName'] } }
-      compute_cost = begin
                      response.map { |c| c['properties']['cost'] }.reduce(:+)
                    rescue NoMethodError
                      0.0
@@ -88,19 +83,8 @@ class AzureProject < Project
         )
       end
 
-      if rerun && compute_cost_log
-        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
-        compute_cost_log.save!
-      else
-        compute_cost_log = CostLog.create(
-          project_id: id,
-          cost: compute_cost,
-          currency: 'GBP',
-          scope: 'compute',
-          date: date.to_s,
-          timestamp: Time.now.to_s
-        )
-      end
+      data_out_cost_log, data_out_amount_log = get_data_out_figures(response, date, rerun)
+      compute_cost_log = get_compute_costs(response, date, rerun)
     end
 
     overall_usage = get_overall_usage(date)
@@ -111,6 +95,10 @@ class AzureProject < Project
         "*Compute Cost (GBP):* #{compute_cost_log.cost.to_f.ceil(2)}",
         "*Compute Units (Flat):* #{compute_cost_log.compute_cost}",
         "*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n",
+        "*Data Out (GB):* #{data_out_amount_log.amount.to_f.ceil(4)}",
+        "*Data Out Costs (GBP):* #{data_out_cost_log.cost.to_f.ceil(2)}",
+        "*Compute Units (Flat):* #{data_out_cost_log.compute_cost}",
+        "*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n",
         "*Total Cost (GBP):* #{total_cost_log.cost.to_f.ceil(2)}",
         "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
         "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}\n",
@@ -149,6 +137,19 @@ class AzureProject < Project
                    end
       total_costs = (total_costs * 10 * 1.25).ceil
 
+      data_out_costs = costs_this_month.select do |cost|
+        cost['properties']["additionalInfo"] &&
+        JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut")
+      end
+
+      data_out_cost = 0.0
+      data_out_amount = 0.0
+      data_out_costs.each do |cost|
+        data_out_cost += cost['properties']['cost']
+        data_out_amount += cost['properties']['quantity']
+      end
+      data_out_cost = (data_out_cost * 10 * 1.25).ceil
+
       compute_nodes = self.instance_logs.where(compute: 1).where('timestamp LIKE ?', "%#{start_date.to_s[0..6]}%")
       compute_costs_this_month = costs_this_month.select { |cd| compute_nodes.any? { |node| node.instance_name == cd['properties']['resourceName'] } }
       compute_costs = begin
@@ -183,6 +184,7 @@ class AzureProject < Project
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
       "*Monthly Budget:* #{self.budget} compute units",
       "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
+      "*Data Egress Costs for #{date_range}:* #{data_out_cost} compute units (#{data_out_amount} GB)",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
       "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
       "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
@@ -274,6 +276,83 @@ class AzureProject < Project
     overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
+  def get_compute_costs(cost_entries, date, rerun)
+    compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
+
+    if !compute_cost_log
+      compute_costs = cost_entries.select { |cd| historic_compute_nodes(date).any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      compute_cost = begin
+                      compute_costs.map { |c| c['properties']['cost'] }.reduce(:+)
+                     rescue NoMethodError
+                      0.0
+                     end
+      if rerun && compute_cost_log
+        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
+        compute_cost_log.save!
+      else
+        compute_cost_log = CostLog.create(
+          project_id: id,
+          cost: compute_cost,
+          currency: 'GBP',
+          scope: 'compute',
+          date: date.to_s,
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    compute_cost_log
+  end
+
+  def get_data_out_figures(cost_entries, date, rerun)
+    data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
+    data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")
+    data_out_figures = nil
+    # only make query if don't already have data in logs or asked to recalculate
+    if !data_out_cost_log || !data_out_amount_log || rerun
+      data_out_costs = cost_entries.select do |cost|
+        cost['properties']["additionalInfo"] &&
+        JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut")
+      end
+
+      data_out_cost = 0.0
+      data_out_amount = 0.0
+      data_out_costs.each do |cost|
+        data_out_cost += cost['properties']['cost']
+        data_out_amount += cost['properties']['quantity']
+      end
+      
+      if data_out_cost_log && rerun
+        data_out_cost_log.assign_attributes(cost: data_out_cost, timestamp: Time.now.to_s)
+        data_out_cost_log.save!
+      else
+        data_out_cost_log = CostLog.create(
+          project_id: self.id,
+          cost: data_out_cost,
+          currency: "GBP",
+          date: date.to_s,
+          scope: "data_out",
+          timestamp: Time.now.to_s
+        )
+      end
+
+      if data_out_amount_log && rerun
+        data_out_amount_log.assign_attributes(amount: data_out_amount, timestamp: Time.now.to_s)
+        data_out_amount_log.save!
+      else
+        data_out_amount_log = UsageLog.create(
+          project_id: self.id,
+          amount: data_out_amount,
+          unit: "GB",
+          start_date: date.to_s,
+          end_date: (date + 1).to_s,
+          description: "data_out",
+          scope: "project",
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    return data_out_cost_log, data_out_amount_log
+  end
 
   def api_query_compute_nodes
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/resourceGroups/#{resource_group}/providers/Microsoft.Compute/virtualMachines"
