@@ -58,7 +58,7 @@ class AzureProject < Project
     cached = total_cost_log && !rerun
     response = nil
 
-    if rerun !(total_cost_log && data_out_cost_log && data_out_amount_log && compute_cost_log)
+    if rerun || !(total_cost_log && data_out_cost_log && data_out_amount_log && compute_cost_log)
       response = api_query_cost(date)
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
