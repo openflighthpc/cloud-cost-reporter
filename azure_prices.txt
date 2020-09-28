@@ -1,4 +1,4 @@
-2020-09-25 11:42:05 +0100
+2020-09-28 11:55:46 +0100
 {"EffectiveDate":"2019-05-30T00:00:00Z","IncludedQuantity":0.0,"MeterCategory":"Virtual Machines","MeterId":"4cf365ac-a677-46f0-8fd8-06ef79e74ab4","MeterName":"Dsv3 Type1","MeterRates":{"0":2.912667},"MeterRegion":"UK West","MeterStatus":"Active","MeterSubCategory":"DSv3 Series Dedicated Host","MeterTags":[],"Unit":"1 Hour"}
 {"EffectiveDate":"2019-05-01T00:00:00Z","IncludedQuantity":0.0,"MeterCategory":"Virtual Machines","MeterId":"28de18f1-9a11-4bab-ae7e-d318230975db","MeterName":"NC24s v3","MeterRates":{"0":10.699656},"MeterRegion":"UK South","MeterStatus":"Active","MeterSubCategory":"NCSv3 Series","MeterTags":[],"Unit":"1 Hour"}
 {"EffectiveDate":"2019-01-01T00:00:00Z","IncludedQuantity":0.0,"MeterCategory":"Virtual Machines","MeterId":"02320e69-b489-4073-8e70-505c6673b466","MeterName":"F2s v2","MeterRates":{"0":0.075276},"MeterRegion":"UK West","MeterStatus":"Active","MeterSubCategory":"FSv2 Series","MeterTags":[],"Unit":"1 Hour"}
