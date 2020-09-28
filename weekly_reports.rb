@@ -9,7 +9,6 @@ def all_projects(date, slack, rerun, verbose)
       project.weekly_report(date, slack, rerun, verbose)
     rescue AzureApiError => e
       puts e
-      next
     end
   end
 end
@@ -44,7 +43,6 @@ if ARGV[0] && ARGV[0] != "all"
     project.weekly_report(date, slack, rerun, verbose)
   rescue AzureApiError => e
     puts e
-    next
   end
 else
   all_projects(date, slack, rerun, verbose)

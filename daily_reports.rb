@@ -9,7 +9,6 @@ def all_projects(date, slack, rerun, verbose)
       project.daily_report(date, slack, rerun, verbose)
     rescue AzureApiError => e
       puts e.message
-      next
     end
   end
 end
