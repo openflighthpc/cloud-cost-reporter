@@ -137,6 +137,19 @@ class AzureProject < Project
                    end
       total_costs = (total_costs * 10 * 1.25).ceil
 
+      data_out_costs = costs_this_month.select do |cost|
+        cost['properties']["additionalInfo"] &&
+        JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut")
+      end
+
+      data_out_cost = 0.0
+      data_out_amount = 0.0
+      data_out_costs.each do |cost|
+        data_out_cost += cost['properties']['cost']
+        data_out_amount += cost['properties']['quantity']
+      end
+      data_out_cost = (data_out_cost * 10 * 1.25).ceil
+
       compute_nodes = self.instance_logs.where(compute: 1).where('timestamp LIKE ?', "%#{start_date.to_s[0..6]}%")
       compute_costs_this_month = costs_this_month.select { |cd| compute_nodes.any? { |node| node.instance_name == cd['properties']['resourceName'] } }
       compute_costs = begin
@@ -171,6 +184,7 @@ class AzureProject < Project
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
       "*Monthly Budget:* #{self.budget} compute units",
       "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
+      "*Data Egress Costs for #{date_range}:* #{data_out_cost} compute units (#{data_out_amount} GB)",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
       "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
       "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
