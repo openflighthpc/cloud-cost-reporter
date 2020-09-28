@@ -50,7 +50,7 @@ class AzureProject < Project
   def daily_report(date=Date.today-2, slack=true, rerun=false, verbose=false)
     @verbose = verbose
     record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
-    total_cost_log = cost_logs.find_by(date: date.to_s, scope: "total")
+    total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
     data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
@@ -58,7 +58,7 @@ class AzureProject < Project
     cached = total_cost_log && !rerun
     response = nil
 
-    if rerun || !total_cost_log || !data_out_cost_log || !data_out_amount_log || !compute_cost_log
+    if rerun !(total_cost_log && data_out_cost_log && data_out_amount_log && compute_cost_log)
       response = api_query_cost(date)
       # the query has multiple values that sound useful (effectivePrice, cost, 
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
