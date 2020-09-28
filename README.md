@@ -87,6 +87,8 @@ Both of these files also take up to 4 arguments:
 2: a specific date or 'latest'. All dates must be in the format YYYY-MM-DD\
 3 (optional & unordered): 'slack' or 'text'. If text no message will be sent to slack\
 4 (optional & unordered): 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
+5 (optional & unordered): 'verbose' will expand any brief Azure errors to include the full HTTP response from the Azure API instead of just the error code.
+
 
 ## Examples
 
@@ -114,8 +116,6 @@ To get all projects' reports for a specific day, with only text output and fresh
 
 `ruby weekly_reports.rb all 2020-09-20 text rerun`
 
-
-A 'verbose' flag is also optional at the command line. Including it will expand any brief errors to include further debug information. For Azure, this means including the full HTTP response from the Azure API instead of just the error code.
 
 ### Recording Azure Pricing
 
