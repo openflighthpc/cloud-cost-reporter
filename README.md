@@ -1,6 +1,6 @@
-# ruby-cost-tracker
+# cloud-cost-reporter
 
-Tracker tool for Azure and AWS costs.
+Tracker and reporting tool for Azure and AWS costs.
 
 ## Overview
 
