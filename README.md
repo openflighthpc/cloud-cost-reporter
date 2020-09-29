@@ -84,9 +84,10 @@ Weekly reports can similarly be generated using `ruby weekly_reports.rb`. If run
 Both of these files also take up to 6 arguments:
 
 1: project name or 'all'\
-2: a specific date or 'latest'. All dates must be in the format YYYY-MM-DD\
+2: a specific date or 'latest'. All dates must be in the format YYYY-MM-DD
 
-The following are optional and unordered (but must be at least the third argument)\
+The following are optional and unordered (but must be at least the third argument):
+
 3: 'slack' will post the results to the chosen slack channel(s)\
 4: 'text' will print out the results\
 5: 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
@@ -115,9 +116,9 @@ To get a report for a specific project, with cost data from two days ago, with o
 
 To get a report for a specific project for a specific date, with both slack and text output and using cached data if present
 
-`ruby daily_reports.rb projectName 2020-09-20`
+`ruby daily_reports.rb projectName 2020-09-20 slack text`
 
-`ruby weekly_reports.rb projectName 2020-09-20`
+`ruby weekly_reports.rb projectName 2020-09-20 slack text`
 
 To get all projects' reports for a specific day, with only text output and fresh cost and usage queries
 
