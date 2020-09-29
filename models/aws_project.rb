@@ -43,7 +43,7 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def daily_report(date=(Date.today - 2), slack=true, rerun=false, verbose=false)
+  def daily_report(date=(Date.today - 2), slack=true, text=true, rerun=false, verbose=false)
     @verbose = false
     start_date = Date.parse(self.start_date)
     if date < start_date
@@ -87,12 +87,14 @@ class AwsProject < Project
 
     send_slack_message(msg) if slack
 
-    puts "\nProject: #{self.name}"
-    puts msg.gsub(":moneybag:", "").gsub("*", "").gsub("\t", "")
-    puts "_" * 50
+    if text
+      puts "\nProject: #{self.name}"
+      puts msg.gsub(":moneybag:", "").gsub("*", "").gsub("\t", "")
+      puts "_" * 50
+    end
   end
 
-  def weekly_report(date=Date.today - 2, slack=true, rerun=false, verbose=false)
+  def weekly_report(date=Date.today - 2, slack=true, text=true, rerun=false, verbose=false)
     @verbose = false
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
@@ -181,8 +183,10 @@ class AwsProject < Project
       msg = "\t\t\t\t\t*Cached Report*\n" << report.content
     end
     send_slack_message(msg) if slack
-    puts (msg.gsub(":calendar:", "").gsub("*", "").gsub(":awooga:", ""))
-    puts '_' * 50
+    if text
+      puts (msg.gsub(":calendar:", "").gsub("*", "").gsub(":awooga:", ""))
+      puts '_' * 50
+    end
   end
 
   def get_latest_prices
