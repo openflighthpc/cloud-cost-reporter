@@ -47,7 +47,7 @@ class AzureProject < Project
     @metadata['resource_group']
   end
 
-  def daily_report(date=Date.today-2, slack=true, rerun=false, verbose=false)
+  def daily_report(date=Date.today-2, slack=true, text=true, rerun=false, verbose=false)
     @verbose = verbose
     record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
@@ -106,13 +106,15 @@ class AzureProject < Project
         "*Compute Instance Usage:* #{overall_usage}"
       ].join("\n") + "\n"
     send_slack_message(msg) if slack
-
-    puts "\nProject: #{self.name}\n"
-    puts msg.gsub(":moneybag:", "").gsub("*", "")
-    puts "_" * 50
+    
+    if text
+      puts "\nProject: #{self.name}\n"
+      puts msg.gsub(":moneybag:", "").gsub("*", "")
+      puts "_" * 50
+    end
   end
 
-  def weekly_report(date=Date.today - 2, slack=true, rerun=false, verbose=false)
+  def weekly_report(date=Date.today - 2, slack=true, text=true, rerun=false, verbose=false)
     @verbose = verbose
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
@@ -218,8 +220,10 @@ class AzureProject < Project
       msg = "\t\t\t\t\t*Cached Report*\n" << report.content
     end
     send_slack_message(msg) if slack
-    puts (msg.gsub(":calendar:", "").gsub("*", "").gsub(":awooga:", ""))
-    puts '_' * 50
+    if text
+      puts (msg.gsub(":calendar:", "").gsub("*", "").gsub(":awooga:", ""))
+      puts '_' * 50
+    end
   end
 
   def record_instance_logs(rerun=false)

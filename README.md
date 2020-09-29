@@ -81,18 +81,21 @@ Daily reports can be generated using `ruby daily_reports.rb`. If run without any
 
 Weekly reports can similarly be generated using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far, including estimating costs for the rest of the month. The results will be printed to the terminal and posted to the chosen slack channel(s). Weekly reports use the specified date (2 days ago by default) for historical cost data, and will use either use the specified date's instance information, or today's if generating the 'latest' report.
 
-Both of these files also take up to 4 arguments:
+Both of these files also take up to 6 arguments:
 
 1: project name or 'all'\
 2: a specific date or 'latest'. All dates must be in the format YYYY-MM-DD\
-3 (optional & unordered): 'slack' or 'text'. If text no message will be sent to slack\
-4 (optional & unordered): 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
-5 (optional & unordered): 'verbose' will expand any brief Azure errors to include the full HTTP response from the Azure API instead of just the error code.
+
+The following are optional and unordered (but must be at least the third argument)\
+3: 'slack' will post the results to the chosen slack channel(s)\
+4: 'text' will print out the results\
+5: 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
+6: 'verbose' will expand any brief Azure errors to include the full HTTP response from the Azure API instead of just the error code.
 
 
 ## Examples
 
-To get all projects' reports with cost data from two days ago, with slack messaging, using cached data if present:
+To get all projects' reports with cost data from two days ago, with both slack and text output, using cached data if present:
 
 `ruby daily_reports.rb` or `ruby daily_reports.rb all latest`
 
@@ -104,7 +107,13 @@ To get a report for a specific project, with cost data from two days ago, with o
 
 `ruby weekly_reports.rb projectName latest text`
 
-To get a report for a specific project for a specific date, with slack output and using cached data if present
+To get a report for a specific project, with cost data from two days ago, with only slack output and using cached data if present:
+
+`ruby daily_reports.rb projectName latest slack`
+
+`ruby weekly_reports.rb projectName latest slack`
+
+To get a report for a specific project for a specific date, with both slack and text output and using cached data if present
 
 `ruby daily_reports.rb projectName 2020-09-20`
 
