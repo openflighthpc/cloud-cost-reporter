@@ -89,7 +89,7 @@ Both of these files also take up to 6 arguments:
 The following are optional and unordered (but must be at least the third argument):
 
 3: 'slack' will post the results to the chosen slack channel(s)\
-4: 'text' will print out the results\
+4: 'text' will print out the results. If no output method is specified (neither 'text' or 'slack'), results will be posted to slack and printed on the terminal\
 5: 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
 6: 'verbose' will expand any brief Azure errors to include the full HTTP response from the Azure API instead of just the error code.
 
