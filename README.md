@@ -33,6 +33,8 @@ The project and compute tags must also be activated in the Billing console (see 
 
 This application makes use of a number of AWS sdks, which require a valid `Access Key ID` and `Secret Access Key`. This should relate to a user with access to: Billing and Cost Management, Cost Explorer API, EC2 API and Pricing API.
 
+For AWS projects you also need to supply your 12 digit `AWS Account ID`, which can be found on the AWS console under 'My Security Credentials' (see https://docs.aws.amazon.com/general/latest/gr/acct-identifiers.html for details).
+
 ### Azure
 
 In this application, Azure projects are assumed to be confined to a single Azure resource group (to be specified at project creation). In addition, it is required that compute nodes be given the `"type" => "compute"` tag on the Azure platform.
