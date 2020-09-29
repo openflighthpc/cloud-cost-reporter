@@ -92,7 +92,7 @@ def add_project
   metadata = {}
   if attributes[:host].downcase == "aws"
     print "Region (e.g. eu-west-2: "
-    attributes["region"] = gets.chomp
+    metadata["region"] = gets.chomp
     print "Access Key Id: "
     metadata["access_key_ident"] = gets.chomp
     print "Secret Access Key: "
