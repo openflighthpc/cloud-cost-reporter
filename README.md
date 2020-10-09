@@ -81,9 +81,9 @@ Base compute units are calculated as 10 * the GBP cost. For costs received in US
 
 The application includes functionality for generating both daily and weekly reports of cloud usage and cost data. The obtained data is saved in the database and, unless specified, queries where an existing report exists will use stored data instead of making fresh sdk/api calls.
 
-Daily reports can be generated using `ruby daily_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for 2 days ago (as cost & usage data takes 2 days to update). The results will be printed to the terminal and posted to the chosen slack channel(s).
+Daily reports can be generated using `ruby daily_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for 3 days ago (as cost & usage data takes 3 days to update). The results will be printed to the terminal and posted to the chosen slack channel(s).
 
-Weekly reports can similarly be generated using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far, including estimating costs for the rest of the month. The results will be printed to the terminal and posted to the chosen slack channel(s). Weekly reports use the specified date (2 days ago by default) for historical cost data, and will use either use the specified date's instance information, or today's if generating the 'latest' report.
+Weekly reports can similarly be generated using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far, including estimating costs for the rest of the month. The results will be printed to the terminal and posted to the chosen slack channel(s). Weekly reports use the specified date (3 days ago by default) for historical cost data, and will use either use the specified date's instance information, or today's if generating the 'latest' report.
 
 Both of these files also take up to 6 arguments:
 
@@ -100,19 +100,19 @@ The following are optional and unordered (but must be at least the third argumen
 
 ## Examples
 
-To get all projects' reports with cost data from two days ago, with both slack and text output, using cached data if present:
+To get all projects' reports with cost data from three days ago, with both slack and text output, using cached data if present:
 
 `ruby daily_reports.rb` or `ruby daily_reports.rb all latest`
 
 `ruby weekly_reports.rb` or `ruby weekly_reports.rb all latest`
 
-To get a report for a specific project, with cost data from two days ago, with only text output and using cached data if present:
+To get a report for a specific project, with cost data from three days ago, with only text output and using cached data if present:
 
 `ruby daily_reports.rb projectName latest text`
 
 `ruby weekly_reports.rb projectName latest text`
 
-To get a report for a specific project, with cost data from two days ago, with only slack output and using cached data if present:
+To get a report for a specific project, with cost data from three days ago, with only slack output and using cached data if present:
 
 `ruby daily_reports.rb projectName latest slack`
 
