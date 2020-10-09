@@ -9,6 +9,7 @@ ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_t
 
 class Project < ActiveRecord::Base
   FIXED_MONTHLY_CU_COST = 5000
+  DEFAULT_DATE = Date.today - 3
   belongs_to :customer
   has_many :cost_logs
   has_many :instance_logs

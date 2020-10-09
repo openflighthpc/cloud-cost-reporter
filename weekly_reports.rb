@@ -13,7 +13,7 @@ def all_projects(date, slack, text, rerun, verbose)
   end
 end
 
-date = Date.today - 2
+date = Project::DEFAULT_DATE
 project = nil
 rerun = ARGV.include?("rerun")
 slack = ARGV.include?("slack")
