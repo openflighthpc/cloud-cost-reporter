@@ -43,7 +43,7 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def daily_report(date=(Date.today - 2), slack=true, text=true, rerun=false, verbose=false)
+  def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false)
     @verbose = false
     start_date = Date.parse(self.start_date)
     if date < start_date
@@ -54,7 +54,7 @@ class AwsProject < Project
       return
     end
 
-    record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
+    record_instance_logs(rerun) if date >= DEFAULT_DATE && date <= Date.today
     
     cached = !rerun && self.cost_logs.find_by(date: date.to_s, scope: "total")
 
@@ -94,14 +94,14 @@ class AwsProject < Project
     end
   end
 
-  def weekly_report(date=Date.today - 2, slack=true, text=true, rerun=false, verbose=false)
+  def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false)
     @verbose = false
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
       record_instance_logs(rerun)
       get_latest_prices
-      usage = get_overall_usage(date == Date.today - 2 ? Date.today : date, true)
+      usage = get_overall_usage(date == DEFAULT_DATE ? Date.today : date, true)
 
       start_date = Date.parse(self.start_date)
       if date < start_date
@@ -125,7 +125,7 @@ class AwsProject < Project
       total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
       total_costs = (total_costs * CostLog::USD_GBP_CONVERSION * 10 * 1.25).ceil
 
-      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
+      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)
       future_costs = 0.0
       logs.each do |log|
         if log.status.downcase == "running"
@@ -137,7 +137,7 @@ class AwsProject < Project
 
       remaining_budget = self.budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == Date.today - 2 ? Time.now : date + 0.5)
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
       time_lag = (instances_date.to_date - date).to_i
       enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
@@ -338,7 +338,7 @@ class AwsProject < Project
     overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
-  def get_usage_hours_by_instance_type(date=(Date.today - 2), rerun)
+  def get_usage_hours_by_instance_type(date=(DEFAULT_DATE), rerun)
     logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: date).where(end_date: date + 1)
     logs.delete_all if rerun
     usage_breakdown = "\n\t\t\t\t"
@@ -410,7 +410,7 @@ class AwsProject < Project
     cost = @explorer.get_cost_and_usage_with_resources(instance_cost_query(instance_id))
   end
 
-  def get_data_out(date=Date.today - 2)
+  def get_data_out(date=DEFAULT_DATE)
     @explorer.get_cost_and_usage(data_out_query(date))
   end
 
@@ -668,8 +668,8 @@ class AwsProject < Project
   def each_instance_usage_query
     {
       time_period: {
-        start: (Date.today - 2).to_s,
-        end: (Date.today - 1).to_s
+        start: (DEFAULT_DATE).to_s,
+        end: (DEFAULT_DATE + 1).to_s
       },
       granularity: "DAILY",
       metrics: ["USAGE_QUANTITY"],
@@ -704,8 +704,8 @@ class AwsProject < Project
   def instance_usage_query(id)
     {
       time_period: {
-        start: (Date.today - 2).to_s,
-        end: (Date.today - 1).to_s
+        start: (DEFAULT_DATE).to_s,
+        end: (DEFAULT_DATE + 1).to_s
       },
       granularity: "DAILY",
       metrics: ["USAGE_QUANTITY"],
@@ -738,8 +738,8 @@ class AwsProject < Project
   def instance_cost_query(id)
     {
       time_period: {
-        start: (Date.today - 2).to_s,
-        end: (Date.today - 1).to_s
+        start: (DEFAULT_DATE).to_s,
+        end: (DEFAULT_DATE + 1).to_s
       },
       granularity: "DAILY",
       metrics: ["UNBLENDED_COST"],
@@ -801,8 +801,8 @@ class AwsProject < Project
   def ssd_usage_query
     {
       time_period: {
-        start: (Date.today - 20).to_s,
-        end: (Date.today - 1).to_s
+        start: (DEFAULT_DATE).to_s,
+        end: (DEFAULT_DATE + 1).to_s
       },
       granularity: "MONTHLY",
       metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],

@@ -47,9 +47,9 @@ class AzureProject < Project
     @metadata['resource_group']
   end
 
-  def daily_report(date=Date.today-2, slack=true, text=true, rerun=false, verbose=false)
+  def daily_report(date=Date.today-3, slack=true, text=true, rerun=false, verbose=false)
     @verbose = verbose
-    record_instance_logs(rerun) if date >= Date.today - 2 && date <= Date.today
+    record_instance_logs(rerun) if date >= DEFAULT_DATE && date <= Date.today
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
     data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")
@@ -114,13 +114,13 @@ class AzureProject < Project
     end
   end
 
-  def weekly_report(date=Date.today - 2, slack=true, text=true, rerun=false, verbose=false)
+  def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false)
     @verbose = verbose
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
       record_instance_logs(rerun)
-      usage = get_overall_usage((date == Date.today - 2 ? Date.today : date), true)
+      usage = get_overall_usage((date == DEFAULT_DATE ? Date.today : date), true)
 
       start_date = Date.parse(self.start_date)
       if date < start_date
@@ -161,7 +161,7 @@ class AzureProject < Project
                    end
       compute_costs = (compute_costs * 10 * 1.25).ceil
 
-      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == Date.today - 2 ? Date.today : date}%").where(compute: 1)
+      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)
       update_prices
       future_costs = 0.0
       logs.each do |log|
@@ -175,18 +175,18 @@ class AzureProject < Project
 
       remaining_budget = self.budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == Date.today - 2 ? Time.now : date + 0.5)
+      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
       time_lag = (instances_date.to_date - date).to_i
       enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
-      date_warning = date > Date.today - 2 ? "\nWarning: data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
+      date_warning = date > Date.today - 3 ? "\nWarning: data takes roughly 72 hours to update, so these figures may be inaccurate\n" : nil
 
       msg = [
       "#{date_warning if date_warning}",
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
       "*Monthly Budget:* #{self.budget} compute units",
       "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
-      "*Data Egress Costs for #{date_range}:* #{data_out_cost} compute units (#{data_out_amount} GB)",
+      "*Data Egress Costs for #{date_range}:* #{data_out_cost} compute units (#{data_out_amount.ceil(2)} GB)",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
       "*Remaining Monthly Budget:* #{remaining_budget} compute units\n",
       "*Current Usage (as of #{instances_date.strftime('%H:%M %Y-%m-%d')})*",
