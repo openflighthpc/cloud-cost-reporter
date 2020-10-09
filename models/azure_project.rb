@@ -47,9 +47,9 @@ class AzureProject < Project
     @metadata['resource_group']
   end
 
-  def daily_report(date=Date.today-3, slack=true, text=true, rerun=false, verbose=false)
+  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false)
     @verbose = verbose
-    record_instance_logs(rerun) if date >= DEFAULT_DATE && date <= Date.today
+    record_instance_logs(rerun) if date == DEFAULT_DATE
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
     data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")

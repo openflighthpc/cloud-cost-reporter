@@ -54,7 +54,7 @@ class AwsProject < Project
       return
     end
 
-    record_instance_logs(rerun) if date >= DEFAULT_DATE && date <= Date.today
+    record_instance_logs(rerun) if date == DEFAULT_DATE
     
     cached = !rerun && self.cost_logs.find_by(date: date.to_s, scope: "total")
 
