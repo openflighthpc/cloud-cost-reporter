@@ -33,7 +33,6 @@ require_relative 'project'
 
 class AwsProject < Project
   @@prices = {}
-  @regions = nil
   after_initialize :add_sdk_objects
 
   def access_key_ident
@@ -44,8 +43,8 @@ class AwsProject < Project
     @metadata['key']
   end
 
-  def region
-    @metadata['region']
+  def regions
+    @metadata['regions']
   end
 
   def account_id 
@@ -66,13 +65,8 @@ class AwsProject < Project
     @metadata = JSON.parse(self.metadata)
     Aws.config.update({region: "us-east-1"})
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
-    @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: self.region)
+    @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: self.regions.first)
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
-    determine_regions
-  end
-
-  def determine_regions
-    @regions ||= @instances_checker.describe_regions.regions.map { |region| region[:region_name] }
   end
 
   def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
@@ -419,7 +413,7 @@ class AwsProject < Project
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
     if today_logs.count == 0
-      @regions.reverse.each do |region|
+      regions.reverse.each do |region|
         @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: region)
         @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
           reservation.instances.each do |instance|
