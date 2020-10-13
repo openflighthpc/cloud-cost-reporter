@@ -33,8 +33,7 @@ require_relative 'project'
 
 class AwsProject < Project
   @@prices = {}
-  @@regions = nil
-
+  @regions = nil
   after_initialize :add_sdk_objects
 
   def access_key_ident
@@ -73,7 +72,7 @@ class AwsProject < Project
   end
 
   def determine_regions
-    @@regions ||= @instances_checker.describe_regions({all_regions: true}).regions.map { |region| region[:region_name] }
+    @regions ||= @instances_checker.describe_regions.regions.map { |region| region[:region_name] }
   end
 
   def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
@@ -420,29 +419,33 @@ class AwsProject < Project
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
     if today_logs.count == 0
-      @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
-        reservation.instances.each do |instance|
-          named = ""
-          compute = false
-          instance.tags.each do |tag|
-            if tag.key == "Name"
-              named = tag.value
+      @regions.reverse.each do |region|
+        @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: region)
+        @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
+          reservation.instances.each do |instance|
+            named = ""
+            compute = false
+            instance.tags.each do |tag|
+              if tag.key == "Name"
+                named = tag.value
+              end
+              if tag.key == "compute"
+                compute = tag.value == "true"
+              end
             end
-            if tag.key == "compute"
-              compute = tag.value == "true"
-            end
-          end
 
-          InstanceLog.create(
-            instance_id: instance.instance_id,
-            project_id: self.id,
-            instance_name: named,
-            instance_type: instance.instance_type,
-            compute: compute,
-            status: instance.state.name,
-            host: "AWS",
-            timestamp: Time.now.to_s
-          )
+            InstanceLog.create(
+              instance_id: instance.instance_id,
+              project_id: self.id,
+              instance_name: named,
+              instance_type: instance.instance_type,
+              compute: compute,
+              status: instance.state.name,
+              host: "AWS",
+              region: region,
+              timestamp: Time.now.to_s
+            )
+          end
         end
       end
     end
