@@ -76,7 +76,7 @@ class AwsProject < Project
       file = File.open('aws_region_names.txt')
       file.readlines.each do |line|
         line = line.split(",")
-        @@region_mappings[line[0]] = line[1].chomp
+        @@region_mappings[line[0]] = line[1].strip
       end
     end
   end
