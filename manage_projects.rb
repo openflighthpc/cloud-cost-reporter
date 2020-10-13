@@ -118,6 +118,12 @@ def update_regions(project)
   metadata = JSON.parse(project.metadata)
   regions = project.regions
   puts "Regions: #{regions.join(", ")}"
+  aws_regions = []
+  file = File.open('aws_region_names.txt')
+  file.readlines.each do |line|
+    line = line.split(",")
+    aws_regions << line[0]
+  end
   stop = false
   valid = false
   while stop == false
@@ -127,7 +133,22 @@ def update_regions(project)
       if response == "add"
         valid = true
         print "Add region (e.g. eu-central-1): "
-        regions << gets.chomp
+        region = gets.chomp
+        continue = false
+        while continue == false
+          if !aws_regions.include?(region)
+            puts "Warning: #{region} not found in list of valid aws regions. Do you wish to continue (y/n)? "
+            response = gets.chomp.downcase
+            if response == "n"
+              return update_regions(project)
+            elsif response != "y"
+              puts "Invalid select, please try again"
+            else
+              continue = true
+            end
+          end
+        end
+        regions << region
         metadata[:regions] = regions.uniq
         project.metadata = metadata.to_json
         project.save!
@@ -167,6 +188,7 @@ def update_regions(project)
       elsif action != "y"
         puts "Invalid option. Please try again"
       else
+        puts "Regions: #{regions.join(", ")}"
         stop = false
         yes_or_no = true
         valid = false
