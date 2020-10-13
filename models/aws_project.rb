@@ -33,6 +33,7 @@ require_relative 'project'
 
 class AwsProject < Project
   @@prices = {}
+  @@regions = nil
 
   after_initialize :add_sdk_objects
 
@@ -68,6 +69,11 @@ class AwsProject < Project
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
     @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: self.region)
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
+    determine_regions
+  end
+
+  def determine_regions
+    @@regions ||= @instances_checker.describe_regions({all_regions: true}).regions.map { |region| region[:region_name] }
   end
 
   def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
