@@ -33,6 +33,7 @@ require_relative 'project'
 
 class AwsProject < Project
   @@prices = {}
+  @@region_mappings = {}
   after_initialize :add_sdk_objects
 
   def access_key_ident
@@ -67,6 +68,17 @@ class AwsProject < Project
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
     @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: self.regions.first)
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
+    determine_region_mappings 
+  end
+
+  def determine_region_mappings
+    if @@region_mappings == {}
+      file = File.open('aws_region_names.txt')
+      file.readlines.each do |line|
+        line = line.split(",")
+        @@region_mappings[line[0]] = line[1].chomp
+      end
+    end
   end
 
   def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
@@ -155,7 +167,7 @@ class AwsProject < Project
       future_costs = 0.0
       logs.each do |log|
         if log.status.downcase == "running"
-          future_costs += @@prices[self.region][log.instance_type]
+          future_costs += @@prices[log.region][log.instance_type]
         end
       end
       daily_future_cu = (future_costs * CostLog::USD_GBP_CONVERSION * 24 * 10 * 1.25).ceil
@@ -216,13 +228,15 @@ class AwsProject < Project
   end
 
   def get_latest_prices
-    instance_types = self.instance_logs.where(host: "AWS").group(:instance_type).pluck(:instance_type)
-    instance_types.each do |instance_type|
-      if !@@prices.has_key?(self.region)
+    instance_types = self.instance_logs.where(host: "AWS").group(:instance_type).pluck(:instance_type, :region)
+    instance_types.each do |instance_type_details|
+      instance_type = instance_type_details[0]
+      region = instance_type_details[1]
+      if !@@prices.has_key?(region)
         @@prices[region] = {}
       end
-      if !@@prices[self.region].has_key?(instance_type)
-        @@prices[self.region][instance_type] = get_cost_per_hour(instance_type)
+      if !@@prices[region].has_key?(instance_type)
+        @@prices[region][instance_type] = get_cost_per_hour(instance_type, region)
       end
     end
   end
@@ -315,8 +329,8 @@ class AwsProject < Project
     total_cost_log
   end
 
-  def get_cost_per_hour(resource_name)
-    result = @pricing_checker.get_products(pricing_query(resource_name)).price_list
+  def get_cost_per_hour(resource_name, region)
+    result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
     details = JSON.parse(result.first)["terms"]["OnDemand"]
     details = details[details.keys[0]]["priceDimensions"]
     details[details.keys[0]]["pricePerUnit"]["USD"].to_f
@@ -872,7 +886,7 @@ class AwsProject < Project
     }
   end
 
-  def pricing_query(resource_name)
+  def pricing_query(resource_name, region)
     {
       service_code: "AmazonEC2",
       filters: [ 
@@ -884,7 +898,7 @@ class AwsProject < Project
         {
           field: "location", 
           type: "TERM_MATCH", 
-          value: "EU (London)", 
+          value: @@region_mappings[region], 
         },
         {
           field: "tenancy",
