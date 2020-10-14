@@ -30,8 +30,10 @@ require_relative 'project'
 
 class AzureProject < Project
   @@prices = {}
+  @@region_mappings = {}
 
   after_initialize :construct_metadata
+  after_initialize :update_region_mappings
   after_initialize :refresh_auth_token
 
   def tenant_id
@@ -196,7 +198,7 @@ class AzureProject < Project
       logs.each do |log|
         if log.status.downcase == 'available'
           type = log.instance_type.gsub("Standard_", "").gsub("_", " ")
-          future_costs += @@prices[self.location][type][0]
+          future_costs += @@prices[@@region_mappings[log.region]][type][0]
         end
       end
       daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
@@ -262,6 +264,7 @@ class AzureProject < Project
       active_nodes = api_query_active_nodes
       active_nodes&.each do |node|
         name = node['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
+        region = node['location']
         cnode = today_compute_nodes.detect do |compute_node|
                   compute_node['name'] == name
                 end
@@ -275,6 +278,7 @@ class AzureProject < Project
           compute: compute ? 1 : 0,
           status: node['properties']['availabilityState'],
           host: 'Azure',
+          region: region,
           timestamp: Time.now.to_s
         )
       end
@@ -440,7 +444,6 @@ class AzureProject < Project
       query: query,
       headers: { 'Authorization': "Bearer #{bearer_token}" }
     )
-
     if response.success?
       nodes = response['value']
       nodes.select do |node|
@@ -483,8 +486,15 @@ class AzureProject < Project
   end
 
   def get_prices
+    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region).sort
+    regions.map! do |region|
+      value = @@region_mappings[region]
+      puts "No region mapping for #{region}, please update 'azure_region_names.txt' and rerun" and return if !value
+      value
+    end
     timestamp = Date.parse(File.open('azure_prices.txt').first) rescue false
-    if timestamp == false || Date.today - timestamp >= 1
+    existing_regions = File.open('azure_prices.txt').first(2).last.chomp rescue false
+    if timestamp == false || Date.today - timestamp >= 1 || existing_regions == false || existing_regions != regions.to_s
       update_bearer_token
       uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
       response = HTTParty.get(
@@ -494,8 +504,9 @@ class AzureProject < Project
 
       if response.success?
         File.write('azure_prices.txt', "#{Time.now}\n")
+        File.write('azure_prices.txt', "#{regions}\n", mode: "a")
         response['Meters'].each do |meter|
-          if meter['MeterRegion'].include?('UK') && meter['MeterCategory'] == "Virtual Machines" &&
+          if regions.include?(meter['MeterRegion']) && meter['MeterCategory'] == "Virtual Machines" &&
             !meter['MeterName'].downcase.include?('low priority') &&
             !meter["MeterSubCategory"].downcase.include?("windows")
             File.write("azure_prices.txt", meter.to_json, mode: "a")
@@ -524,23 +535,33 @@ class AzureProject < Project
   end
 
   def update_prices
-    #don't need to get again if another project has already added prices for the same location
-    return if @@prices.has_key?(self.location)
+    if @@prices == {}
+      get_prices
+      File.open('azure_prices.txt').each_with_index do |entry, index|
+        if index > 1
+          entry = JSON.parse(entry)
+          instance_type = entry['MeterName']
+          region = entry['MeterRegion']
+          if !@@prices.has_key?(region)
+            @@prices[region] = {}
+          end
 
-    get_prices
-    File.open('azure_prices.txt').each_with_index do |entry, index|
-      if index != 0
-        entry = JSON.parse(entry)
-        instance_type = entry['MeterName']
-        if !@@prices.has_key?(self.location)
-          @@prices[self.location] = {}
+          if !@@prices[region].has_key?(instance_type) ||
+            (@@prices[region].has_key?(instance_type) &&
+            Date.parse(entry['EffectiveDate']) > @@prices[region][instance_type][1])
+            @@prices[region][instance_type] = [entry['MeterRates']["0"].to_f, Date.parse(entry['EffectiveDate'])]
+          end
         end
+      end
+    end
+  end
 
-        if !@@prices[self.location].has_key?(instance_type) ||
-          (@@prices[self.location].has_key?(instance_type) &&
-          Date.parse(entry['EffectiveDate']) > @@prices[self.location][instance_type][1])
-          @@prices[self.location][instance_type] = [entry['MeterRates']["0"].to_f, Date.parse(entry['EffectiveDate'])]
-        end
+  def update_region_mappings
+    if @@region_mappings == {}
+      file = File.open('azure_region_names.txt')
+      file.readlines.each do |line|
+        line = line.split(",")
+        @@region_mappings[line[0]] = line[1].strip
       end
     end
   end

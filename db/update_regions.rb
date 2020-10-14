@@ -24,7 +24,7 @@ db.execute "ALTER TABLE instance_logs ADD COLUMN region TEXT" rescue puts "colum
 logs = InstanceLog.includes(:project)
 logs.each do |log|
   if log.region == nil
-    log.region = log.project.aws? ? "eu-west-2" : "UK South"
+    log.region = log.project.aws? ? "eu-west-2" : "uksouth"
     log.save!
   end
 end
