@@ -324,7 +324,7 @@ def add_project
     metadata["client_secret"] = gets.chomp
     resource_groups = []
     print "First resource group name: "
-    resource_groups << gets.chomp
+    resource_groups << gets.chomp.downcase
     stop = false
     while !stop
       valid = false
