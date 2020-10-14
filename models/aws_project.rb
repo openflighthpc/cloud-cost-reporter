@@ -228,7 +228,7 @@ class AwsProject < Project
   end
 
   def get_latest_prices
-    instance_types = self.instance_logs.where(host: "AWS").group(:instance_type).pluck(:instance_type, :region)
+    instance_types = self.instance_logs.where(host: "AWS").group(:region, :instance_type).pluck(:instance_type, :region)
     instance_types.each do |instance_type_details|
       instance_type = instance_type_details[0]
       region = instance_type_details[1]
