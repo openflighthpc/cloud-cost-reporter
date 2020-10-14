@@ -18,7 +18,7 @@ Project.where(host: "aws").each do |project|
   project.save!
 end
 
-# move from having one resource group to multiple (zure only)
+# move from having one resource group to multiple (azure only)
 Project.where(host: "azure").each do |project|
   metadata = JSON.parse(project.metadata)
   resource_groups = metadata["resource_groups"]

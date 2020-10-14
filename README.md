@@ -29,7 +29,7 @@ These tags should be added at the point a resource is created. If adding tags to
 
 This application includes in its breakdown details of instances specifically used as compute nodes. For this to be measured accurately, the appropriate instances should have a tag added with the key `compute` and the value `true`. Again, these should be added at the point of creation.
 
-The project and compute tags must also be activated in the Billing console (see https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/activating-tags.html).
+The project and compute tags must also be activated in the Billing console (see https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/activating-tags.html). It may take up to 24 hours for new tags to appear in this console.
 
 This application makes use of a number of AWS sdks, which require a valid `Access Key ID` and `Secret Access Key`. This should relate to a user with access to: Billing and Cost Management, Cost Explorer API, EC2 API and Pricing API.
 
@@ -49,9 +49,9 @@ Azure projects require the following details to be obtained prior to project cre
 - Client (application) ID
 - Client secret
 - Subscription ID
-- Resource group name
+- Resource group name(s)
 
-The first three can be obtained via the app you created in Azure Active Directory. The subscription ID is located in the overview for the subscription containing the project; as is the resource group name in the overview for the resource group.
+The first three can be obtained via the app you created in Azure Active Directory. The subscription ID is located in the overview for the subscription containing the project; as is the resource group name in the overview for the resource group. A project may have more than one resource group, but these must be part of the same subscription.
 
 ### Slack
 
