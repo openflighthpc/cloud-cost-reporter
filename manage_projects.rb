@@ -126,8 +126,8 @@ def update_regions(project)
   end
   stop = false
   valid = false
-  while stop == false
-    while valid == false
+  while !stop
+    while !valid
       puts "Add or delete region (add/delete)? "
       response = gets.chomp.downcase
       if response == "add"
@@ -135,7 +135,7 @@ def update_regions(project)
         print "Add region (e.g. eu-central-1): "
         region = gets.chomp
         continue = false
-        while continue == false
+        while !continue
           if !aws_regions.include?(region)
             puts "Warning: #{region} not found in list of valid aws regions. Do you wish to continue (y/n)? "
             response = gets.chomp.downcase
@@ -157,7 +157,7 @@ def update_regions(project)
         if regions.length > 1
           valid = true
           present = false
-          while present == false
+          while !present
             print "Region to delete: "
             to_delete = gets.chomp
             present = regions.include?(to_delete)
@@ -179,7 +179,7 @@ def update_regions(project)
       end
     end
     yes_or_no = false
-    while yes_or_no == false
+    while !yes_or_no
       print "Add/ delete another region (y/n)? "
       action = gets.chomp.downcase
       if action == "n"
@@ -216,9 +216,9 @@ def add_project
     print "Primary region (e.g. eu-west-2): "
     regions << gets.chomp
     stop = false
-    while stop == false
+    while !stop
       valid = false
-      while valid == false
+      while !valid
         print "Additional regions (y/n)? "
         response = gets.chomp.downcase
         if response == "n"
@@ -230,7 +230,7 @@ def add_project
           puts "Invalid response. Please try again"
         end
       end
-      if stop == false
+      if !stop
         print "Additional region (e.g. eu-central-1): "
         regions << gets.chomp
       end
