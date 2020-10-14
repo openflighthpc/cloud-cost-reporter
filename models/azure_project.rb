@@ -72,8 +72,8 @@ class AzureProject < Project
     self.instance_logs.where("timestamp LIKE ?", "%#{date}%").where(compute: 1) 
   end
 
-  def resource_group
-    @metadata['resource_group']
+  def resource_groups
+    @metadata['resource_groups']
   end
 
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
@@ -392,7 +392,7 @@ class AzureProject < Project
   end
 
   def api_query_compute_nodes
-    uri = "https://management.azure.com/subscriptions/#{subscription_id}/resourceGroups/#{resource_group}/providers/Microsoft.Compute/virtualMachines"
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/virtualMachines"
     query = {
       'api-version': '2020-06-01',
     }
@@ -404,37 +404,44 @@ class AzureProject < Project
 
     if response.success?
       vms = response['value']
-      vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' }
+      vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
     else
-      raise AzureApiError.new("Error querying compute nodes for project #{name}/#{resource_group}.\n
+      raise AzureApiError.new("Error querying compute nodes for project #{name}.\n
                               Error code #{response.code}.\n
                               #{response if @verbose}")
     end
   end
 
   def api_query_cost(start_date, end_date=start_date)
+    resource_groups_conditional = ""
+    self.resource_groups.each_with_index do |group, index|
+      if index == 0 
+        resource_groups_conditional << "and properties/resourceGroup eq '#{group}'"
+      else
+        resource_groups_conditional << " or properties/resourceGroup eq '#{group}'"
+      end
+    end
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails"
     query = {
       'api-version': '2019-10-01',
-      '$filter': "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}' and properties/resourceGroup eq '#{resource_group}'"
+      '$filter': "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}' #{resource_groups_conditional}"
     }
     response = HTTParty.get(
       uri,
       query: query,
       headers: { 'Authorization': "Bearer #{bearer_token}" }
     )
-
     if response.success?
       details = response['value']
     else
-      raise AzureApiError.new("Error querying daily cost Azure API for project #{name}/#{resource_group}.\n
+      raise AzureApiError.new("Error querying daily cost Azure API for project #{name}.\n
                           Error code #{response.code}.\n
                           #{response if @verbose}")
     end
   end
 
   def api_query_active_nodes
-    uri = "https://management.azure.com/subscriptions/#{subscription_id}/resourceGroups/#{resource_group}/providers/Microsoft.ResourceHealth/availabilityStatuses"
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.ResourceHealth/availabilityStatuses"
     query = {
       'api-version': '2020-05-01',
       '$filter': "resourceType eq 'Microsoft.Compute/virtualMachines'"
@@ -447,12 +454,15 @@ class AzureProject < Project
     if response.success?
       nodes = response['value']
       nodes.select do |node|
-        today_compute_nodes.any? do |cn|
-          node['id'].match(/virtualMachines\/(.*)\/providers/i)[1] == cn['name']
+        r_group = node['id'].split('/')[4].downcase
+        if self.resource_groups.include?(r_group)
+          today_compute_nodes.any? do |cn|
+            node['id'].match(/virtualMachines\/(.*)\/providers/i)[1] == cn['name']
+          end
         end
       end
     else
-      raise AzureApiError.new("Error querying node status Azure API for project #{name}/#{resource_group}.\n
+      raise AzureApiError.new("Error querying node status Azure API for project #{name}.\n
                               Error code #{response.code}.\n
                               #{response if @verbose}")
     end
@@ -479,7 +489,7 @@ class AzureProject < Project
       self.metadata = @metadata.to_json
       self.save
     else
-      raise AzureApiError.new("Error obtaining new authorization token for project #{name}/#{resource_group}.\n
+      raise AzureApiError.new("Error obtaining new authorization token for project #{name}.\n
                               Error code #{response.code}/\n
                               #{response if @verbose}")
     end

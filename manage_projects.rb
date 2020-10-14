@@ -50,6 +50,7 @@ def add_or_update_project(action=nil)
     puts "budget: #{project.budget}c.u./month"
     puts "regions: #{project.regions.join(", ")}" if project.aws?
     puts "location: #{project.location}" if project.azure?
+    puts "resource_groups: #{project.resource_groups.join(", ")}"
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
     update_attributes(project)
@@ -80,7 +81,9 @@ def update_attributes(project)
 
   if attribute == "regions"
     update_regions(project)
-  else
+  elsif attribute == "resource_groups" || attribute == "resource groups"
+    update_resource_groups(project)
+  else  
     if attribute == "metadata"
       metadata = JSON.parse(project.metadata)
       print "Key name: "
@@ -197,6 +200,70 @@ def update_regions(project)
   end
 end
 
+def update_resource_groups(project)
+  metadata = JSON.parse(project.metadata)
+  resource_groups = project.resource_groups
+  puts "Resource groups: #{resource_groups.join(", ")}"
+  stop = false
+  valid = false
+  while !stop
+    while !valid
+      puts "Add or delete resource group (add/delete)? "
+      response = gets.chomp.downcase
+      if response == "add"
+        valid = true
+        print "Add resource group: "
+        group = gets.chomp.downcase
+        continue = false
+        resource_groups << group
+        metadata[:resource_groups] = resource_groups.uniq
+        project.metadata = metadata.to_json
+        project.save!
+        puts "Resource group added"
+      elsif response == "delete"
+        if resource_groups.length > 1
+          valid = true
+          present = false
+          while !present
+            print "Resource group to delete: "
+            to_delete = gets.chomp.downcase
+            present = resource_groups.include?(to_delete)
+            if present
+              resource_groups.delete(to_delete)
+              metadata["resource_groups"] = resource_groups
+              project.metadata = metadata.to_json
+              project.save!
+              puts "Resource group deleted"
+            else
+              puts "Resource group #{to_delete} not present for this project"
+            end
+          end
+        else
+          puts "Cannot delete as must have at least one resource group"
+        end
+      else
+        puts "Invalid response, please try again"
+      end
+    end
+    yes_or_no = false
+    while !yes_or_no
+      print "Add/ delete another resource group (y/n)? "
+      action = gets.chomp.downcase
+      if action == "n"
+        stop = true
+        yes_or_no = true
+      elsif action != "y"
+        puts "Invalid option. Please try again"
+      else
+        puts "Resource groups: #{resource_groups.join(", ")}"
+        stop = false
+        yes_or_no = true
+        valid = false
+      end
+    end
+  end
+end
+
 def add_project
   attributes = {}
   print "Project name: "
@@ -255,8 +322,30 @@ def add_project
     metadata["subscription_id"] = gets.chomp
     print "Client Secret: "
     metadata["client_secret"] = gets.chomp
-    print "Resource group name: "
-    metadata["resource_group"] = gets.chomp
+    resource_groups = []
+    print "First resource group name: "
+    resource_groups << gets.chomp
+    stop = false
+    while !stop
+      valid = false
+      while !valid
+        print "Additional resource groups (y/n)? "
+        response = gets.chomp.downcase
+        if response == "n"
+          stop = true
+          valid = true
+        elsif response == "y"
+          valid = true
+        else
+          puts "Invalid response. Please try again"
+        end
+      end
+      if !stop
+        print "Additional resource group name: "
+        resource_groups << gets.chomp.downcase
+      end
+    end
+    metadata["resource_groups"] = resource_groups
   end
   attributes[:metadata] = metadata.to_json
   
