@@ -85,7 +85,7 @@ Daily reports can be generated using `ruby daily_reports.rb`. If run without any
 
 Weekly reports can similarly be generated using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far, including estimating costs for the rest of the month. The results will be printed to the terminal and posted to the chosen slack channel(s). Weekly reports use the specified date (3 days ago by default) for historical cost data, and will use either use the specified date's instance information, or today's if generating the 'latest' report.
 
-Both of these files also take up to 6 arguments:
+Both of these files also take up to 7 arguments:
 
 1: project name or 'all'\
 2: a specific date or 'latest'. All dates must be in the format YYYY-MM-DD
@@ -95,7 +95,8 @@ The following are optional and unordered (but must be at least the third argumen
 3: 'slack' will post the results to the chosen slack channel(s)\
 4: 'text' will print out the results. If no output method is specified (neither 'text' or 'slack'), results will be posted to slack and printed on the terminal\
 5: 'rerun' will ignore cached reports and regenerate them with fresh sdk/ api calls\
-6: 'verbose' will expand any brief Azure errors to include the full HTTP response from the Azure API instead of just the error code.
+6: 'verbose' will expand any brief Azure errors to include the full HTTP response from the Azure API instead of just the error code.\
+7: 'customer' or 'internal' will show customer facing or true instance names respectively. If not specified, by default daily reports will show true names and weekly reports customer facing names. For weekly reports this argument will not alter a cached report (which is stored as text), so if used for a previously generated weekly report, must also include the argument 'rerun'. Daily reports are stored as their component parts, so these names can be altered without a rerun.
 
 
 ## Examples
@@ -129,6 +130,14 @@ To get all projects' reports for a specific day, with only text output and fresh
 `ruby daily_reports.rb all 2020-09-20 text rerun`
 
 `ruby weekly_reports.rb all 2020-09-20 text rerun`
+
+To get all projects' daily reports for a specific day, with only text output and customer facing instance names
+
+`ruby daily_reports.rb all 2020-09-20 text customer`
+
+To get all projects' weekly reports for a specific day, with only text output, true instance names and fresh cost and usage queries
+
+`ruby weekly_reports.rb all 2020-09-20 text internal rerun `
 
 
 ### Recording Azure Pricing
