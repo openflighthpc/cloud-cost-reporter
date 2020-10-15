@@ -8,6 +8,6 @@ class InstanceLog < ActiveRecord::Base
 
   def customer_facing_type
     customer_facing = InstanceMapping.find_by(instance_type: self.instance_type)
-    customer_facing ? customer_facing.first.customer_facing_name : "Compute (Other)"
+    customer_facing ? customer_facing.customer_facing_name : "Compute (Other)"
   end
 end
