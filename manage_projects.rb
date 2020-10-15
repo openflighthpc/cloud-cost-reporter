@@ -9,17 +9,19 @@ def add_or_update_project(action=nil)
   if action == "update"
     print "Project name: "
     project_name = gets.chomp
-    project = factory.as_type(Project.find_by_name(project_name))
+    project = Project.find_by_name(project_name)
     if project == nil
       puts "Project not found. Please try again."
       return add_or_update_project("update")
     end
+    project = factory.as_type(project)
     puts project.name
     puts "host: #{project.host}"
     puts "start_date: #{project.start_date}"
     puts "end_date: #{project.end_date}"
-    puts "budget: #{project.budget}"
-    puts "region: #{project.region}"
+    puts "budget: #{project.budget}c.u./month"
+    puts "region: #{project.region}" if project.aws?
+    puts "location: #{project.location}" if project.azure?
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
     update_attributes(project)
@@ -84,7 +86,7 @@ def add_project
   attributes[:host] = gets.chomp.downcase
   print "Start date (YYYY-MM-DD): "
   attributes[:start_date] = gets.chomp
-  print "Budget (c.u.): "
+  print "Budget (c.u./month): "
   attributes[:budget] = gets.chomp
   print "Slack Channel: "
   attributes[:slack_channel] = gets.chomp
