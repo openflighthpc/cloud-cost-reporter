@@ -43,7 +43,7 @@ class AwsProject < Project
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
   end
 
-  def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false)
+  def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
     @verbose = false
     start_date = Date.parse(self.start_date)
     if date < start_date
@@ -61,8 +61,8 @@ class AwsProject < Project
     compute_cost_log = get_compute_costs(date, rerun)
     data_out_cost_log, data_out_amount_log = get_data_out_figures(date, rerun)
     total_cost_log = get_total_costs(date, rerun)
-    overall_usage = get_overall_usage(date)
-    usage_breakdown = get_usage_hours_by_instance_type(date, rerun)
+    overall_usage = get_overall_usage(date, customer_facing)
+    usage_breakdown = get_usage_hours_by_instance_type(date, rerun, customer_facing)
 
     date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
@@ -94,14 +94,14 @@ class AwsProject < Project
     end
   end
 
-  def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false)
+  def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=true)
     @verbose = false
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
       record_instance_logs(rerun)
       get_latest_prices
-      usage = get_overall_usage(date == DEFAULT_DATE ? Date.today : date, true)
+      usage = get_overall_usage(date == DEFAULT_DATE ? Date.today : date, customer_facing)
 
       start_date = Date.parse(self.start_date)
       if date < start_date
@@ -338,18 +338,17 @@ class AwsProject < Project
     overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
-  def get_usage_hours_by_instance_type(date=(DEFAULT_DATE), rerun)
+  def get_usage_hours_by_instance_type(date=(DEFAULT_DATE), rerun=false, customer_facing=false)
     logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: date).where(end_date: date + 1)
     logs.delete_all if rerun
     usage_breakdown = "\n\t\t\t\t"
+    compute_other = []
     if !logs.any?
       usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
-
       usage_by_instance_type.results_by_time[0].groups.each do |group|
         instance_type = group[:keys][0]
         amount = group[:metrics]["UsageQuantity"][:amount].to_f.round(2)
-        usage_breakdown << "#{instance_type}: #{amount} hours \n\t\t\t\t"
-        UsageLog.create(
+        log = UsageLog.create(
           project_id: self.id,
           description: instance_type,
           amount: amount,
@@ -359,13 +358,28 @@ class AwsProject < Project
           end_date: date + 1,
           timestamp: Time.now
         )
+        if customer_facing
+          mapping = InstanceMapping.find_by(instance_type: instance_type)
+          if mapping
+            instance_type = mapping.customer_facing_name
+          else
+            compute_other << log
+          end
+        end
+        usage_breakdown << "#{instance_type}: #{amount} hours \n\t\t\t\t" if !compute_other.include?(log)
       end
     else
       logs.each do |log|
-        usage_breakdown = "#{log.description}: #{log.amount} hours \n\t\t\t\t"
+        type = customer_facing ? log.customer_facing_type : log.description
+        if type == "Compute (Other)"
+          compute_other << log
+        else
+          usage_breakdown << "#{type}: #{log.amount} hours \n\t\t\t\t"
+        end
       end
     end
-
+    compute_other_hours = compute_other.reduce(0.0) { |sum, log| sum + log.amount }.ceil(2)
+    usage_breakdown << "Compute (Other): #{compute_other_hours} hours \n\t\t\t\t" if compute_other.any?
     usage_breakdown == "\n\t\t\t\t" ? "None" : usage_breakdown
   end
 
