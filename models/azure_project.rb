@@ -76,6 +76,10 @@ class AzureProject < Project
     @metadata['resource_groups']
   end
 
+  def describe_resource_groups
+    resource_groups.join(", ")
+  end
+
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
     @verbose = verbose
     record_instance_logs(rerun) if date == DEFAULT_DATE

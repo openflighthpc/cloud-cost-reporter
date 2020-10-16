@@ -7,8 +7,7 @@ db = SQLite3::Database.open 'db/cost_tracker.sqlite3'
 # move from having one region to multiple (aws only)
 Project.where(host: "aws").each do |project|
   metadata = JSON.parse(project.metadata)
-  regions = metadata["regions"]
-  regions ||= []
+  regions = metadata["regions"] ||= []
   if metadata.has_key?("region")
     regions << metadata["region"]
   end
@@ -21,8 +20,7 @@ end
 # move from having one resource group to multiple (azure only)
 Project.where(host: "azure").each do |project|
   metadata = JSON.parse(project.metadata)
-  resource_groups = metadata["resource_groups"]
-  resource_groups ||= []
+  resource_groups = metadata["resource_groups"] ||= []
   if metadata.has_key?("resource_group")
     resource_groups << metadata["resource_group"]
   end

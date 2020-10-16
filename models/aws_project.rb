@@ -48,6 +48,10 @@ class AwsProject < Project
     @metadata['regions']
   end
 
+  def describe_regions
+    regions.join(", ")
+  end
+
   def account_id 
     @metadata['account_id']
   end
