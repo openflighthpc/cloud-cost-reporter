@@ -111,8 +111,28 @@ def add_project
   attributes[:name] = gets.chomp
   print "Host (aws or azure): "
   attributes[:host] = gets.chomp.downcase
-  print "Start date (YYYY-MM-DD): "
-  attributes[:start_date] = gets.chomp
+  valid_date = false
+  while !valid_date
+    print "Start date (YYYY-MM-DD): "
+    valid_date = Date.parse(gets.chomp) rescue false
+    if valid_date
+      attributes[:start_date] = valid_date
+    else
+      puts "Invalid date. Please ensure it is in the format YYYY-MM-DD"
+    end
+  end
+  valid_date = false
+  while !valid_date
+    print "End date (YYYY-MM-DD). Press enter to leave blank: "
+    date = gets.chomp
+    break if date == ""
+    valid_date = Date.parse(date) rescue false
+    if valid_date
+      attributes[:start_date] = valid_date
+    else
+      puts "Invalid date. Please ensure it is in the format YYYY-MM-DD"
+    end
+  end
   print "Budget (c.u./month): "
   attributes[:budget] = gets.chomp
   print "Slack Channel: "
@@ -128,8 +148,17 @@ def add_project
     metadata["key"] = gets.chomp
     print "Account Id number: "
     metadata["account_id"] = gets.chomp
-    print "Filtering level (tag/account): "
-    metadata["filter_level"] = gets.chomp
+    valid = false
+    while !valid
+      print "Filtering level (tag/account): "
+      response = gets.strip.downcase
+      if ["tag", "account"].include?(response)
+        valid = true
+        metadata["filter_level"] = response
+      else
+        puts "Invalid selection. Please enter tag or account"
+      end
+    end
   else
     print "Location (e.g. UK South): "
     metadata["location"] = gets.chomp
