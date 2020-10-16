@@ -136,7 +136,7 @@ def update_regions(project)
       if response == "add"
         valid = true
         print "Add region (e.g. eu-central-1): "
-        region = gets.chomp
+        region = gets.chomp.downcase
         continue = false
         while !continue
           if !aws_regions.include?(region)

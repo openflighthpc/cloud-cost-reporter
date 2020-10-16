@@ -74,11 +74,7 @@ class Project < ActiveRecord::Base
     Date.parse(self.end_date) > Date.today
   end
 
-<<<<<<< HEAD
-  def daily_report(date=Date.today - 2, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
-=======
-  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false)
->>>>>>> more readme updates
+  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
   end
 
   def get_forecasts
