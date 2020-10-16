@@ -74,31 +74,6 @@ class Project < ActiveRecord::Base
     Date.parse(self.end_date) > Date.today
   end
 
-  def region_or_location
-    metadata = JSON.parse(self.metadata)
-    if self.azure?
-      metadata['location']
-    else
-      metadata['region']
-    end
-  end
-
-  def resource_group
-    metadata = JSON.parse(self.metadata)
-    if self.azure?
-      metadata['resource_group']
-    end
-  end
-
-  def filter_level
-    metadata = JSON.parse(self.metadata)
-    if self.aws?
-      metadata['filter_level']
-    else
-      "Resource group"
-    end
-  end
-
   def daily_report(date=Date.today - 2, slack=true, text=true, rerun=false)
   end
 

@@ -56,7 +56,7 @@ def add_or_update_project(action=nil)
   elsif action == "add"
     add_project
   elsif action == "list"
-    tp Project.all
+    tp ProjectFactory.new().all_projects_as_type
     puts
     add_or_update_project
   else
@@ -166,5 +166,21 @@ def add_project
   puts "Project #{project.name} created"
 end
 
-tp.set Project, :id, :name, :host, :budget, :start_date, :end_date, :slack_channel, :region_or_location, :resource_group, :filter_level
+# for table print
+class NoMissingMethodFormatter
+  def format(value)
+    value == "Method Missing" ? nil : value
+  end
+end
+
+formatter = NoMissingMethodFormatter.new
+tp.set AwsProject, :id, :name, :host, :budget, :start_date, :end_date,
+:slack_channel, {region: {formatters: [formatter]}}, {location: {formatters: [formatter]}},
+{resource_group: {formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
+tp.set AzureProject, :id, :name, :host, :budget, :start_date, :end_date,
+:slack_channel, {region: {formatters: [formatter]}}, {location: {formatters: [formatter]}},
+{resource_group: {formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
+
 add_or_update_project
+
+
