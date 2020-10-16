@@ -74,7 +74,7 @@ class AzureProject < Project
     @metadata['resource_group']
   end
 
-  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false)
+  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
     @verbose = verbose
     record_instance_logs(rerun) if date == DEFAULT_DATE
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
@@ -114,7 +114,7 @@ class AzureProject < Project
       compute_cost_log = get_compute_costs(response, date, rerun)
     end
 
-    overall_usage = get_overall_usage(date)
+    overall_usage = get_overall_usage(date, customer_facing)
 
     msg = [
         "#{"*Cached report*" if cached}",
@@ -141,13 +141,13 @@ class AzureProject < Project
     end
   end
 
-  def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false)
+  def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=true)
     @verbose = verbose
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
       record_instance_logs(rerun)
-      usage = get_overall_usage((date == DEFAULT_DATE ? Date.today : date), true)
+      usage = get_overall_usage((date == DEFAULT_DATE ? Date.today : date), customer_facing)
 
       start_date = Date.parse(self.start_date)
       if date < start_date
@@ -164,6 +164,7 @@ class AzureProject < Project
                    rescue NoMethodError
                      0.0
                    end
+      total_costs ||= 0.0
       total_costs = (total_costs * 10 * 1.25).ceil
 
       data_out_costs = costs_this_month.select do |cost|
@@ -186,6 +187,7 @@ class AzureProject < Project
                    rescue NoMethodError
                      0.0
                    end
+      compute_costs ||= 0.0
       compute_costs = (compute_costs * 10 * 1.25).ceil
 
       logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)

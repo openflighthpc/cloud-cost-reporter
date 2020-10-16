@@ -74,7 +74,7 @@ class Project < ActiveRecord::Base
     Date.parse(self.end_date) > Date.today
   end
 
-  def daily_report(date=Date.today - 2, slack=true, text=true, rerun=false)
+  def daily_report(date=Date.today - 2, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
   end
 
   def get_forecasts
@@ -86,7 +86,7 @@ class Project < ActiveRecord::Base
   def record_cost_log
   end
 
-  def weekly_report(date=Date.today - 2, slack=true, text=true, rerun=false)
+  def weekly_report(date=Date.today - 2, slack=true, text=true, rerun=false, verbose=false, customer_facing=true)
   end
 
   def get_data_out(date=Date.today - 2)
