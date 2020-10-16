@@ -26,11 +26,12 @@
 #==============================================================================
 
 require_relative './models/instance_mapping'
+require 'table_print'
 
 def add_or_update_mapping
   valid_action = false
   while !valid_action
-    print "Add, update or delete customer facing instance name (add/update/delete)? "
+    print "List, add, update or delete customer facing instance name(s) (list/add/update/delete)? "
     action = gets.chomp.downcase
     if action == "update" || action == "delete"
       valid_action = true
@@ -48,6 +49,9 @@ def add_or_update_mapping
     elsif action == "add"
       valid_action = true
       add_mapping
+    elsif action == "list"
+      tp InstanceMapping.all
+      puts
     else
       puts "Invalid selection, please try again."
     end

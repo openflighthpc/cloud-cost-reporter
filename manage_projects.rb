@@ -26,11 +26,12 @@
 #==============================================================================
 
 require_relative './models/project_factory'
+require 'table_print'
 
 def add_or_update_project(action=nil)
   factory = ProjectFactory.new
   if action == nil
-    print "Add or update project (add/update)? "
+    print "List, add or update project(s) (list/add/update)? "
     action = gets.chomp.downcase
   end
   if action == "update"
@@ -54,6 +55,10 @@ def add_or_update_project(action=nil)
     update_attributes(project)
   elsif action == "add"
     add_project
+  elsif action == "list"
+    tp ProjectFactory.new().all_projects_as_type
+    puts
+    add_or_update_project
   else
     puts "Invalid selection, please try again."
     add_or_update_project
@@ -161,4 +166,21 @@ def add_project
   puts "Project #{project.name} created"
 end
 
+# for table print
+class NoMissingMethodFormatter
+  def format(value)
+    value == "Method Missing" ? "n/a" : value
+  end
+end
+
+formatter = NoMissingMethodFormatter.new
+tp.set AwsProject, :id, :name, :host, :budget, :start_date, :end_date,
+:slack_channel, {region: {formatters: [formatter]}}, {location: {formatters: [formatter]}},
+{resource_group: {formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
+tp.set AzureProject, :id, :name, :host, :budget, :start_date, :end_date,
+:slack_channel, {region: {formatters: [formatter]}}, {location: {formatters: [formatter]}},
+{resource_group: {formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
+
 add_or_update_project
+
+
