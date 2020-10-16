@@ -169,7 +169,7 @@ end
 # for table print
 class NoMissingMethodFormatter
   def format(value)
-    value == "Method Missing" ? nil : value
+    value == "Method Missing" ? "n/a" : value
   end
 end
 
