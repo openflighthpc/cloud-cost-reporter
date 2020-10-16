@@ -10,14 +10,14 @@ A proof of concept application for tracking Azure and AWS costs and usage. Built
 
 This application requires Ruby (2.5.1) and a recent version of Bundler (2.1.4).
 
-After downloading the source code (via git or other means), the gems need to be installed using bundler:
+Some assembly is required post-clone:
 
 ```
 cd /path/to/source
 bundle install
+ruby db/setup.rb
+ruby db/add_instance_mappings.rb
 ```
-
-To create the local database, run `db/setup.rb`.
 
 ## Configuration
 
