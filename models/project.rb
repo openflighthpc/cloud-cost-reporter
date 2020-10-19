@@ -58,7 +58,7 @@ class Project < ActiveRecord::Base
     }
   scope :active, -> { 
     where("end_date > ? OR end_date IS NULL", Date.today).where(
-          "start_date <= ?", Date.today)
+          "start_date <= ?", Date.today).reorder(:host)
   }
   
   def aws?

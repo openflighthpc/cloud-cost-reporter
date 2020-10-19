@@ -34,8 +34,10 @@ def all_projects(date, slack, text, rerun, verbose, customer_facing)
   ProjectFactory.new().all_active_projects_as_type.each do |project|
     begin
       project.weekly_report(date, slack, text, rerun, verbose, customer_facing)
-    rescue AzureApiError => e
+    rescue AzureApiError, AwsSdkError => e
+      puts "Generation of weekly report for project #{project.name} stopped due to error: "
       puts e
+      puts "_" * 50
     end
   end
 end
@@ -74,7 +76,8 @@ if ARGV[0] && ARGV[0] != "all"
   begin
     project = ProjectFactory.new().as_type(project)
     project.weekly_report(date, slack, text, rerun, verbose, customer_facing)
-  rescue AzureApiError => e
+  rescue AzureApiError, AwsSdkError => e
+    puts "Generation of weekly report for project #{project.name} stopped due to error: "
     puts e
   end
 else

@@ -31,10 +31,10 @@ require 'table_print'
 def add_or_update_project(action=nil)
   @factory = ProjectFactory.new
   if action == nil
-    print "List, add or update project(s) (list/add/update)? "
+    print "List, add or update project(s) (list/add/update/validate)? "
     action = gets.chomp.downcase
   end
-  if action == "update"
+  if action == "update" || action == "validate"
     print "Project name: "
     project_name = gets.chomp
     project = Project.find_by_name(project_name)
@@ -42,7 +42,10 @@ def add_or_update_project(action=nil)
       puts "Project not found. Please try again."
       return add_or_update_project("update")
     end
-    project = factory.as_type(project)
+    project = @factory.as_type(project)
+    if action == "validate"
+      return validate_credentials(project)
+    end
     puts project.name
     puts "host: #{project.host}"
     puts "start_date: #{project.start_date}"
@@ -85,9 +88,16 @@ def update_attributes(project)
     update_regions(project)
   elsif attribute == "resource_groups" || attribute == "resource groups"
     update_resource_groups(project)
-  else  
+  elsif attribute == "location"
+    print "Value: "
+    value = gets.chomp
+    project.location = value
+  else
     if attribute == "metadata"
       metadata = JSON.parse(project.metadata)
+      keys = metadata.keys
+      keys = keys - ["regions", "resource_groups", "location", "bearer_token", "bearer_expiry"]
+      puts "Possible keys: #{keys.join(", ")}"
       print "Key name: "
       key = gets.chomp
       print 'Value: '
@@ -112,6 +122,26 @@ def update_attributes(project)
     project.save!
     puts "#{attribute} updated successfully"
   end
+  stop = false
+    while !stop
+      valid = false
+      while !valid
+        print "Would you like to validate the project's credentials (y/n)? "
+        response = gets.chomp.downcase
+        if response == "n"
+          stop = true
+          valid = true
+        elsif response == "y"
+          valid = true
+        else
+          puts "Invalid response. Please try again"
+        end
+      end
+      if !stop
+        validate_credentials(project)
+        stop = true
+      end
+    end
   puts "Would you like to update another field (y/n)?"
   action = gets.chomp.downcase
   if action == "y"
@@ -398,8 +428,36 @@ def add_project
     valid = project.valid?
   end
   project.save
-  p = @factory.as_type(project)
   puts "Project #{project.name} created"
+  
+  stop = false
+  while !stop
+    valid = false
+    while !valid
+      print "Validate credentials (y/n)? "
+      response = gets.chomp.downcase
+      if response == "n"
+        stop = true
+        valid = true
+      elsif response == "y"
+        valid = true
+      else
+        puts "Invalid response. Please try again"
+      end
+    end
+    if !stop
+      stop = true
+      validate_credentials(project)
+    end
+  end
+end
+
+def validate_credentials(project)
+  project = @factory.as_type(project)
+  valid = project.validate_credentials
+  if !valid
+    "Please check your credentials and permissions. Entered values can be corrected by rerunning this file and selecting 'update'."
+  end
 end
 
 # for table print

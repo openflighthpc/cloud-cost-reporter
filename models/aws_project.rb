@@ -85,24 +85,25 @@ class AwsProject < Project
     end
   end
 
-  def validate_creds
+  def validate_credentials
+    puts "Validating AWS project credentials."
     valid = true
     begin
-      @explorer.get_cost_and_usage(time_period: {start: Date.today.to_s, end: Date.today.to_s})
+      @explorer.get_cost_and_usage(compute_cost_query(DEFAULT_DATE))
     rescue => error
       valid = false
       puts "Unable to connect to AWS Cost Explorer: #{error}"
     end
     
     begin
-      @instances_checker.describe_instances
+      @instances_checker.describe_instances(project_instances_query)
     rescue => error
-      valide = false
+      valid = false
       puts "Unable to connect to AWS EC2: #{error}."
     end
 
     begin
-      @pricing_checker.get_products(format_version: "aws_v1", max_results: 1)
+      @pricing_checker.get_products(service_code: "AmazonEC2", format_version: "aws_v1", max_results: 1)
     rescue => error
       valid = false
       puts "Unable to connect to AWS Pricing: #{error}"
@@ -113,10 +114,11 @@ class AwsProject < Project
     else
       puts "Please double check your credentials and permissions."
     end
+    valid
   end
 
   def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
-    @verbose = false
+    @verbose = verbose
     start_date = Date.parse(self.start_date)
     if date < start_date
       puts "Given date is before the project start date"
@@ -167,7 +169,7 @@ class AwsProject < Project
   end
 
   def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=true)
-    @verbose = false
+    @verbose = verbose
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
@@ -280,7 +282,11 @@ class AwsProject < Project
 
     # only make query if don't already have data in logs or asked to recalculate
     if !compute_cost_log || rerun
-      compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
+      begin
+        compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
+      rescue => error
+        raise AwsSdkError.new("Unable to determine compute costs for project #{self.name}. #{error if @verbose}") 
+      end
       if rerun && compute_cost_log
         compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
         compute_cost_log.save!
@@ -304,7 +310,11 @@ class AwsProject < Project
     data_out_figures = nil
     # only make query if don't already have data in logs or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
-      data_out_figures = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0]
+      begin
+        data_out_figures = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0]
+      rescue => error
+        raise AwsSdkError.new("Unable to determine data out figures for project #{self.name}. #{error if @verbose}") 
+      end
       data_out_cost = data_out_figures.total["UnblendedCost"][:amount]
       data_out_amount = data_out_figures.total["UsageQuantity"][:amount]
       
@@ -345,7 +355,11 @@ class AwsProject < Project
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     # only make query if don't already have data in logs or asked to recalculate
     if !total_cost_log || rerun
-      daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+      begin
+        daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+      rescue => error
+        raise AwsSdkError.new("Unable to determine total costs for project #{self.name}. #{error if @verbose}") 
+      end
       if total_cost_log && rerun
         total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
         total_cost_log.save!
@@ -364,7 +378,11 @@ class AwsProject < Project
   end
 
   def get_cost_per_hour(resource_name, region)
-    result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
+    begin
+      result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
+    rescue => error
+      raise AwsSdkError.new("Unable to get prices for instance type #{resource_name} in region #{region}. #{error if @verbose}") 
+    end
     details = JSON.parse(result.first)["terms"]["OnDemand"]
     details = details[details.keys[0]]["priceDimensions"]
     details[details.keys[0]]["pricePerUnit"]["USD"].to_f
@@ -418,7 +436,11 @@ class AwsProject < Project
     usage_breakdown = "\n\t\t\t\t"
     compute_other = []
     if !logs.any?
-      usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
+      begin
+        usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
+      rescue => error
+        raise AwsSdkError.new("Unable to determine hours by instance type for project #{self.name}. #{error if @verbose}") 
+      end
       usage_by_instance_type.results_by_time[0].groups.each do |group|
         instance_type = group[:keys][0]
         amount = group[:metrics]["UsageQuantity"][:amount].to_f.round(2)
@@ -463,6 +485,12 @@ class AwsProject < Project
     if today_logs.count == 0
       regions.reverse.each do |region|
         @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: region)
+        results = nil
+        begin
+          results = @instances_checker.describe_instances(project_instances_query)
+        rescue => error
+          raise AwsSdkError.new("Unable to determine AWS instances for project #{self.name} in region #{region}. #{error if @verbose}")
+        end
         @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
           reservation.instances.each do |instance|
             named = ""
@@ -999,4 +1027,7 @@ class AwsProject < Project
       }
     end
   end
+end
+
+class AwsSdkError < StandardError
 end
