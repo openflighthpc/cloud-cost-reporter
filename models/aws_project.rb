@@ -85,6 +85,36 @@ class AwsProject < Project
     end
   end
 
+  def validate_creds
+    valid = true
+    begin
+      @explorer.get_cost_and_usage(time_period: {start: Date.today.to_s, end: Date.today.to_s})
+    rescue => error
+      valid = false
+      puts "Unable to connect to AWS Cost Explorer: #{error}"
+    end
+    
+    begin
+      @instances_checker.describe_instances
+    rescue => error
+      valide = false
+      puts "Unable to connect to AWS EC2: #{error}."
+    end
+
+    begin
+      @pricing_checker.get_products(format_version: "aws_v1", max_results: 1)
+    rescue => error
+      valid = false
+      puts "Unable to connect to AWS Pricing: #{error}"
+    end
+
+    if valid
+      puts "Credentials valid for project #{self.name}."
+    else
+      puts "Please double check your credentials and permissions."
+    end
+  end
+
   def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
     @verbose = false
     start_date = Date.parse(self.start_date)

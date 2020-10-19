@@ -29,7 +29,7 @@ require_relative './models/project_factory'
 require 'table_print'
 
 def add_or_update_project(action=nil)
-  factory = ProjectFactory.new
+  @factory = ProjectFactory.new
   if action == nil
     print "List, add or update project(s) (list/add/update)? "
     action = gets.chomp.downcase
@@ -398,6 +398,7 @@ def add_project
     valid = project.valid?
   end
   project.save
+  p = @factory.as_type(project)
   puts "Project #{project.name} created"
 end
 
