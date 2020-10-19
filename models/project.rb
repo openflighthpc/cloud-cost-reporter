@@ -56,9 +56,10 @@ class Project < ActiveRecord::Base
       in: %w(aws azure),
       message: "%{value} is not a valid host"
     }
+  default_scope { order(:host) }
   scope :active, -> { 
     where("end_date > ? OR end_date IS NULL", Date.today).where(
-          "start_date <= ?", Date.today).reorder(:host)
+          "start_date <= ?", Date.today)
   }
   
   def aws?

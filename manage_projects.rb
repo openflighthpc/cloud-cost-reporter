@@ -40,11 +40,12 @@ def add_or_update_project(action=nil)
     project = Project.find_by_name(project_name)
     if project == nil
       puts "Project not found. Please try again."
-      return add_or_update_project("update")
+      return add_or_update_project(action)
     end
     project = @factory.as_type(project)
     if action == "validate"
-      return validate_credentials(project)
+      validate_credentials(project)
+      return add_or_update_project
     end
     puts project.name
     puts "host: #{project.host}"
@@ -460,7 +461,6 @@ def validate_credentials(project)
   project = @factory.as_type(project)
   project.validate_credentials
   puts
-  add_or_update_project
 end
 
 # for table print
