@@ -1,0 +1,47 @@
+uaecentral,AE Central
+uaenorth,AE North
+eastasia,AP East
+southeastasia,AP Southeast
+australiacentral,AU Central
+australiacentral2,AU Central 2
+australiaeast,AU East
+australiasoutheast,AU Southeast
+brazilsouth,BR South
+brazilsoutheast,BR Southeast
+canadacentral,CA Central
+canadaeast,CA East
+switzerlandnorth,CH North
+switzerlandwest,CH West
+germanynorth,DE North
+germanywestcentral,DE West Central
+northeurope,EU North
+westeurope,EU West
+europe,Europe
+francecentral,FR Central
+francesouth,FR South
+centralindia,IN Central
+southindia,IN South
+westindia,IN West
+india,India
+japaneast,JA East
+japanwest,JA West
+koreacentral,KR Central
+koreasouth,KR South
+norwayeast,NO East
+norwaywest,NO West
+northamerica,North America
+oceania,Oceania
+southamerica,South America
+uksouth,UK South
+ukwest,UK West
+centralus,US Central
+dodus,US DoD
+eastus,US East
+eastus2,US East 2
+northcentralus,US North Central
+southcentralus,US South Central
+westus,US West
+westus2,US West 2
+westcentralus,US West Central
+southafricanorth,ZA North
+southafricawest,ZA West
