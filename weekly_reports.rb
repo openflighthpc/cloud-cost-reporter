@@ -31,7 +31,7 @@ require 'sqlite3'
 require_relative './models/project_factory'
 
 def all_projects(date, slack, text, rerun, verbose, customer_facing)
-  ProjectFactory.new().all_projects_as_type.each do |project|
+  ProjectFactory.new().all_active_projects_as_type.each do |project|
     begin
       project.weekly_report(date, slack, text, rerun, verbose, customer_facing)
     rescue AzureApiError => e
