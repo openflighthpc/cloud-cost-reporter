@@ -49,7 +49,6 @@ def add_or_update_project(action=nil)
     puts "end_date: #{project.end_date}"
     puts "budget: #{project.budget}c.u./month"
     puts "regions: #{project.regions.join(", ")}" if project.aws?
-    puts "location: #{project.location}" if project.azure?
     puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure?
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
@@ -59,7 +58,7 @@ def add_or_update_project(action=nil)
   elsif action == "list"
     formatter = NoMethodMissingFormatter.new
     tp ProjectFactory.new().all_projects_as_type, :id, :name, :host, :budget, :start_date, :end_date,
-    :slack_channel, {regions: {:display_method => :describe_regions, formatters: [formatter]}}, {location: {formatters: [formatter]}},
+    :slack_channel, {regions: {:display_method => :describe_regions, formatters: [formatter]}},
     {resource_groups: {:display_method => :describe_resource_groups, formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
     puts
     add_or_update_project
@@ -315,8 +314,6 @@ def add_project
     print "Filtering level (tag/account): "
     metadata["filter_level"] = gets.chomp
   else
-    print "Location (e.g. UK South): "
-    metadata["location"] = gets.chomp
     print "Tenant Id: "
     metadata["tenant_id"] = gets.chomp
     print "Azure Client Id: "

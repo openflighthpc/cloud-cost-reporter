@@ -60,10 +60,6 @@ class AzureProject < Project
     @metadata['bearer_expiry']
   end
 
-  def location
-    @metadata['location']
-  end
-
   def today_compute_nodes
     @today_compute_nodes ||= api_query_compute_nodes
   end
