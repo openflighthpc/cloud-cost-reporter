@@ -88,15 +88,11 @@ def update_attributes(project)
     update_regions(project)
   elsif attribute == "resource_groups" || attribute == "resource groups"
     update_resource_groups(project)
-  elsif attribute == "location"
-    print "Value: "
-    value = gets.chomp
-    project.location = value
   else
     if attribute == "metadata"
       metadata = JSON.parse(project.metadata)
       keys = metadata.keys
-      keys = keys - ["regions", "resource_groups", "location", "bearer_token", "bearer_expiry"]
+      keys = keys - ["regions", "resource_groups", "bearer_token", "bearer_expiry"]
       puts "Possible keys: #{keys.join(", ")}"
       print "Key name: "
       key = gets.chomp
@@ -300,8 +296,13 @@ def add_project
   attributes = {}
   print "Project name: "
   attributes[:name] = gets.chomp
-  print "Host (aws or azure): "
-  attributes[:host] = gets.chomp.downcase
+  valid = false
+  while !valid
+    print "Host (aws or azure): "
+    value = gets.chomp.downcase
+    valid = ["aws", "azure"].include?(value)
+    valid ? attributes[:host] = value : (puts "Invalid selection. Please enter aws or azure.")
+  end
   valid_date = false
   while !valid_date
     print "Start date (YYYY-MM-DD): "
@@ -332,6 +333,9 @@ def add_project
       puts "Invalid date. Please ensure it is in the format YYYY-MM-DD"
     end
   end
+  
+  print "Start date (YYYY-MM-DD): "
+  attributes[:start_date] = gets.chomp
   print "Budget (c.u./month): "
   attributes[:budget] = gets.chomp
   print "Slack Channel: "
@@ -454,10 +458,9 @@ end
 
 def validate_credentials(project)
   project = @factory.as_type(project)
-  valid = project.validate_credentials
-  if !valid
-    "Please check your credentials and permissions. Entered values can be corrected by rerunning this file and selecting 'update'."
-  end
+  project.validate_credentials
+  puts
+  add_or_update_project
 end
 
 # for table print

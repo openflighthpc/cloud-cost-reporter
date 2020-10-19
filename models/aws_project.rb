@@ -388,20 +388,6 @@ class AwsProject < Project
     details[details.keys[0]]["pricePerUnit"]["USD"].to_f
   end
 
-  def get_forecasts
-    forecast_cost = @explorer.get_cost_forecast(cost_forecast_query).forecast_results_by_time[0].mean_value.to_f
-    forecast_hours = @explorer.get_usage_forecast(usage_forecast_query).forecast_results_by_time[0].mean_value.to_f
-    forecast_cost_rest_of_month = @explorer.get_cost_forecast(rest_of_month_cost_forecast_query).forecast_results_by_time[0].mean_value.to_f
-    msg = "
-    :crystal_ball: Forecast for #{Date.today} :crystal_ball:
-    *USD:* #{forecast_cost.round(2)}
-    *Total EC2 Hours:* #{forecast_hours.round(2)}
-    *USD for rest of month:* #{forecast_cost_rest_of_month.round(2)}
-    "
-
-    send_slack_message(msg)
-  end
-
   def get_overall_usage(date, customer_facing=false)
     logs = self.instance_logs.where('timestamp LIKE ? AND status IS NOT ?', "%#{date}%", "terminated").where(compute: 1)
 
@@ -521,53 +507,11 @@ class AwsProject < Project
     end
   end
 
-  def each_instance_usage_data
-    @explorer.get_cost_and_usage_with_resources(each_instance_usage_query)
-  end
-
-  def get_instance_usage_data(instance_id)
-    hours = @explorer.get_cost_and_usage_with_resources(instance_usage_query(instance_id))
-    cost = @explorer.get_cost_and_usage_with_resources(instance_cost_query(instance_id))
-  end
-
   def get_data_out(date=DEFAULT_DATE)
     @explorer.get_cost_and_usage(data_out_query(date))
   end
 
-  def get_ssd_usage
-    @explorer.get_cost_and_usage(ssd_usage_query)
-  end
-
-    private
-
-  def instance_type_usage_query(date) 
-    {
-      time_period: {
-        start: date.to_s,
-        end: (date + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["USAGE_QUANTITY"],
-      filter: {
-        and: [
-          {
-            dimensions: {
-              key: "USAGE_TYPE_GROUP",
-              values: ["EC2: Running Hours"]
-            }
-          },
-          {
-            tags: {
-              key: "compute",
-              values: ["true"]
-            }
-          },
-          project_filter
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
-    }
-  end
+  private
 
   def compute_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
     {
@@ -629,127 +573,6 @@ class AwsProject < Project
     }
   end
 
-  def usage_forecast_query
-    {
-      time_period: {
-        start: Date.today.to_s,
-        end: (Date.today + 1).to_s
-      },
-      granularity: "DAILY",
-      metric: "USAGE_QUANTITY",
-      filter: {
-        dimensions: {
-          key: "USAGE_TYPE_GROUP",
-          values: ["EC2: Running Hours"]
-        }
-      }
-    }
-  end
-
-  def cost_forecast_query
-    {
-      time_period: {
-        start: (Date.today).to_s,
-        end: (Date.today + 1).to_s
-      },
-      granularity: "DAILY",
-      metric: "UNBLENDED_COST",
-      filter: {
-        not: {
-          dimensions: {
-            key: "RECORD_TYPE",
-            values: ["CREDIT"]
-          }
-        }
-      }
-    }
-  end
-
-  def rest_of_month_cost_forecast_query
-    {
-      time_period: {
-        start: (Date.today).to_s,
-        end: ((Date.today >> 1) - Date.today.day + 1).to_s
-      },
-      granularity: "MONTHLY",
-      metric: "UNBLENDED_COST",
-      filter: {
-        not: {
-          dimensions: {
-            key: "RECORD_TYPE",
-            values: ["CREDIT"]
-          }
-        }
-      }
-    }
-  end
-
-  def each_instance_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
-    {
-      time_period: {
-        start: start_date.to_s,
-        end: (start_date + 1).to_s
-      },
-      granularity: granularity,
-      metrics: ["UNBLENDED_COST"],
-      filter: {
-        and: [
-          {
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          {
-            not: {
-              dimensions: {
-                key: "RESOURCE_ID",
-                values: excluded_instances
-              }
-            }
-          },
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
-    }
-  end
-
-  def per_instance_compute_instance_type_usage_query(date)
-    {
-      time_period: {
-        start: date.to_s,
-        end: (date + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["USAGE_QUANTITY"],
-      filter: {
-        and: [
-          { 
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          {
-            dimensions: {
-              key: "USAGE_TYPE_GROUP",
-              values: ["EC2: Running Hours"]
-            }
-          },
-          {
-            not: {
-              dimensions: {
-                key: "RESOURCE_ID",
-                values: excluded_instances
-              }
-            }
-          },
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
-    }
-  end
-
   def compute_instance_type_usage_query(date)
     {
       time_period: {
@@ -785,104 +608,6 @@ class AwsProject < Project
     }
   end
 
-  def each_instance_usage_query
-    {
-      time_period: {
-        start: (DEFAULT_DATE).to_s,
-        end: (DEFAULT_DATE + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["USAGE_QUANTITY"],
-      filter: {
-        and: [
-          { 
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          {
-            dimensions: {
-              key: "USAGE_TYPE_GROUP",
-              values: ["EC2: Running Hours"]
-            }
-          },
-          {
-            not: {
-              dimensions: {
-                key: "RESOURCE_ID",
-                values: excluded_instances
-              }
-            }
-          },
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
-    }
-  end
-
-  def instance_usage_query(id)
-    {
-      time_period: {
-        start: (DEFAULT_DATE).to_s,
-        end: (DEFAULT_DATE + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["USAGE_QUANTITY"],
-      filter: {
-        and: [
-          { 
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          { 
-            dimensions: {
-              key: "RESOURCE_ID",
-              values: [id]
-            }
-          },
-          {
-            dimensions: {
-              key: "USAGE_TYPE_GROUP",
-              values: ["EC2: Running Hours"]
-            }
-          }
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
-    }
-  end
-
-  def instance_cost_query(id)
-    {
-      time_period: {
-        start: (DEFAULT_DATE).to_s,
-        end: (DEFAULT_DATE + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["UNBLENDED_COST"],
-      filter: {
-        and: [
-          { 
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          { 
-            dimensions: {
-              key: "RESOURCE_ID",
-              values: [id]
-            }
-          },
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
-    }
-  end
-
   def data_out_query(start_date, end_date=start_date + 1, granularity="DAILY")
     {
       time_period: {
@@ -905,36 +630,6 @@ class AwsProject < Project
             }
           },
           project_filter,
-          {
-            not: {
-              dimensions: {
-                key: "RECORD_TYPE",
-                values: ["CREDIT"]
-              }
-            }
-          }
-        ]
-      }
-    }
-  end
-
-  def ssd_usage_query
-    {
-      time_period: {
-        start: (DEFAULT_DATE).to_s,
-        end: (DEFAULT_DATE + 1).to_s
-      },
-      granularity: "MONTHLY",
-      metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
-      filter: {
-        and: [
-          {
-            dimensions: {
-            key: "USAGE_TYPE_GROUP",
-            values: 
-              ["EC2: EBS - SSD(gp2)"]
-            }
-          },
           {
             not: {
               dimensions: {
