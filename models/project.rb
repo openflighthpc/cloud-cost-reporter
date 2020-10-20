@@ -70,8 +70,8 @@ class Project < ActiveRecord::Base
   end
 
   def active?
-    return true if !self.end_date
-    Date.parse(self.end_date) > Date.today
+    Date.parse(self.start_date) <= Date.today &&
+    (!self.end_date || Date.parse(self.end_date) > Date.today)
   end
 
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
