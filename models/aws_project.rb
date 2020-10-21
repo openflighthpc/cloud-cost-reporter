@@ -90,21 +90,21 @@ class AwsProject < Project
     valid = true
     begin
       @explorer.get_cost_and_usage(compute_cost_query(DEFAULT_DATE))
-    rescue => error
+    rescue  Aws::CostExplorer::Errors::ServiceError => error
       valid = false
       puts "Unable to connect to AWS Cost Explorer: #{error}"
     end
     
     begin
       @instances_checker.describe_instances(project_instances_query)
-    rescue => error
+    rescue Aws::EC2::Errors::ServiceError => error
       valid = false
       puts "Unable to connect to AWS EC2: #{error}."
     end
 
     begin
       @pricing_checker.get_products(service_code: "AmazonEC2", format_version: "aws_v1", max_results: 1)
-    rescue => error
+    rescue Aws::Pricing::Errors::ServiceError => error
       valid = false
       puts "Unable to connect to AWS Pricing: #{error}"
     end
@@ -284,7 +284,7 @@ class AwsProject < Project
     if !compute_cost_log || rerun
       begin
         compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
-      rescue => error
+      rescue Aws::CostExplorer::Errors::ServiceError => error
         raise AwsSdkError.new("Unable to determine compute costs for project #{self.name}. #{error if @verbose}") 
       end
       if rerun && compute_cost_log
@@ -312,7 +312,7 @@ class AwsProject < Project
     if !data_out_cost_log || !data_out_amount_log || rerun
       begin
         data_out_figures = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0]
-      rescue => error
+      rescue Aws::CostExplorer::Errors::ServiceError => error
         raise AwsSdkError.new("Unable to determine data out figures for project #{self.name}. #{error if @verbose}") 
       end
       data_out_cost = data_out_figures.total["UnblendedCost"][:amount]
@@ -357,7 +357,7 @@ class AwsProject < Project
     if !total_cost_log || rerun
       begin
         daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
-      rescue => error
+      rescue Aws::CostExplorer::Errors::ServiceError => error
         raise AwsSdkError.new("Unable to determine total costs for project #{self.name}. #{error if @verbose}") 
       end
       if total_cost_log && rerun
@@ -380,7 +380,7 @@ class AwsProject < Project
   def get_cost_per_hour(resource_name, region)
     begin
       result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
-    rescue => error
+    rescue Aws::Pricing::Errors::ServiceError => error
       raise AwsSdkError.new("Unable to get prices for instance type #{resource_name} in region #{region}. #{error if @verbose}") 
     end
     details = JSON.parse(result.first)["terms"]["OnDemand"]
@@ -424,7 +424,7 @@ class AwsProject < Project
     if !logs.any?
       begin
         usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
-      rescue => error
+      rescue Aws::CostExplorer::Errors::ServiceError => error
         raise AwsSdkError.new("Unable to determine hours by instance type for project #{self.name}. #{error if @verbose}") 
       end
       usage_by_instance_type.results_by_time[0].groups.each do |group|
@@ -474,7 +474,7 @@ class AwsProject < Project
         results = nil
         begin
           results = @instances_checker.describe_instances(project_instances_query)
-        rescue => error
+        rescue Aws::EC2::Errors::ServiceError => error
           raise AwsSdkError.new("Unable to determine AWS instances for project #{self.name} in region #{region}. #{error if @verbose}")
         end
         @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|

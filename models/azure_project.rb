@@ -108,7 +108,7 @@ class AzureProject < Project
 
     if !response.success?
       valid = false
-      puts "Unable to connect to AWS Pricing: #{response}\n\n"
+      puts "Unable to connect to Azure Pricing: #{response}\n\n"
     end
 
     if valid
