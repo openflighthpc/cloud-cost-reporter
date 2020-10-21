@@ -85,8 +85,40 @@ class AwsProject < Project
     end
   end
 
+  def validate_credentials
+    puts "Validating AWS project credentials."
+    valid = true
+    begin
+      @explorer.get_cost_and_usage(compute_cost_query(DEFAULT_DATE))
+    rescue  Aws::CostExplorer::Errors::ServiceError => error
+      valid = false
+      puts "Unable to connect to AWS Cost Explorer: #{error}"
+    end
+    
+    begin
+      @instances_checker.describe_instances(project_instances_query)
+    rescue Aws::EC2::Errors::ServiceError => error
+      valid = false
+      puts "Unable to connect to AWS EC2: #{error}."
+    end
+
+    begin
+      @pricing_checker.get_products(service_code: "AmazonEC2", format_version: "aws_v1", max_results: 1)
+    rescue Aws::Pricing::Errors::ServiceError => error
+      valid = false
+      puts "Unable to connect to AWS Pricing: #{error}"
+    end
+
+    if valid
+      puts "Credentials valid for project #{self.name}."
+    else
+      puts "Please double check your credentials and permissions."
+    end
+    valid
+  end
+
   def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
-    @verbose = false
+    @verbose = verbose
     start_date = Date.parse(self.start_date)
     if date < start_date
       puts "Given date is before the project start date"
@@ -137,7 +169,7 @@ class AwsProject < Project
   end
 
   def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=true)
-    @verbose = false
+    @verbose = verbose
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
@@ -250,7 +282,11 @@ class AwsProject < Project
 
     # only make query if don't already have data in logs or asked to recalculate
     if !compute_cost_log || rerun
-      compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
+      begin
+        compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
+      rescue Aws::CostExplorer::Errors::ServiceError => error
+        raise AwsSdkError.new("Unable to determine compute costs for project #{self.name}. #{error if @verbose}") 
+      end
       if rerun && compute_cost_log
         compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
         compute_cost_log.save!
@@ -274,7 +310,11 @@ class AwsProject < Project
     data_out_figures = nil
     # only make query if don't already have data in logs or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
-      data_out_figures = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0]
+      begin
+        data_out_figures = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0]
+      rescue Aws::CostExplorer::Errors::ServiceError => error
+        raise AwsSdkError.new("Unable to determine data out figures for project #{self.name}. #{error if @verbose}") 
+      end
       data_out_cost = data_out_figures.total["UnblendedCost"][:amount]
       data_out_amount = data_out_figures.total["UsageQuantity"][:amount]
       
@@ -315,7 +355,11 @@ class AwsProject < Project
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     # only make query if don't already have data in logs or asked to recalculate
     if !total_cost_log || rerun
-      daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+      begin
+        daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+      rescue Aws::CostExplorer::Errors::ServiceError => error
+        raise AwsSdkError.new("Unable to determine total costs for project #{self.name}. #{error if @verbose}") 
+      end
       if total_cost_log && rerun
         total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
         total_cost_log.save!
@@ -334,24 +378,14 @@ class AwsProject < Project
   end
 
   def get_cost_per_hour(resource_name, region)
-    result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
+    begin
+      result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
+    rescue Aws::Pricing::Errors::ServiceError => error
+      raise AwsSdkError.new("Unable to get prices for instance type #{resource_name} in region #{region}. #{error if @verbose}") 
+    end
     details = JSON.parse(result.first)["terms"]["OnDemand"]
     details = details[details.keys[0]]["priceDimensions"]
     details[details.keys[0]]["pricePerUnit"]["USD"].to_f
-  end
-
-  def get_forecasts
-    forecast_cost = @explorer.get_cost_forecast(cost_forecast_query).forecast_results_by_time[0].mean_value.to_f
-    forecast_hours = @explorer.get_usage_forecast(usage_forecast_query).forecast_results_by_time[0].mean_value.to_f
-    forecast_cost_rest_of_month = @explorer.get_cost_forecast(rest_of_month_cost_forecast_query).forecast_results_by_time[0].mean_value.to_f
-    msg = "
-    :crystal_ball: Forecast for #{Date.today} :crystal_ball:
-    *USD:* #{forecast_cost.round(2)}
-    *Total EC2 Hours:* #{forecast_hours.round(2)}
-    *USD for rest of month:* #{forecast_cost_rest_of_month.round(2)}
-    "
-
-    send_slack_message(msg)
   end
 
   def get_overall_usage(date, customer_facing=false)
@@ -388,7 +422,11 @@ class AwsProject < Project
     usage_breakdown = "\n\t\t\t\t"
     compute_other = []
     if !logs.any?
-      usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
+      begin
+        usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
+      rescue Aws::CostExplorer::Errors::ServiceError => error
+        raise AwsSdkError.new("Unable to determine hours by instance type for project #{self.name}. #{error if @verbose}") 
+      end
       usage_by_instance_type.results_by_time[0].groups.each do |group|
         instance_type = group[:keys][0]
         amount = group[:metrics]["UsageQuantity"][:amount].to_f.round(2)
@@ -433,6 +471,12 @@ class AwsProject < Project
     if today_logs.count == 0
       regions.reverse.each do |region|
         @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: region)
+        results = nil
+        begin
+          results = @instances_checker.describe_instances(project_instances_query)
+        rescue Aws::EC2::Errors::ServiceError => error
+          raise AwsSdkError.new("Unable to determine AWS instances for project #{self.name} in region #{region}. #{error if @verbose}")
+        end
         @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
           reservation.instances.each do |instance|
             named = ""
@@ -463,53 +507,11 @@ class AwsProject < Project
     end
   end
 
-  def each_instance_usage_data
-    @explorer.get_cost_and_usage_with_resources(each_instance_usage_query)
-  end
-
-  def get_instance_usage_data(instance_id)
-    hours = @explorer.get_cost_and_usage_with_resources(instance_usage_query(instance_id))
-    cost = @explorer.get_cost_and_usage_with_resources(instance_cost_query(instance_id))
-  end
-
   def get_data_out(date=DEFAULT_DATE)
     @explorer.get_cost_and_usage(data_out_query(date))
   end
 
-  def get_ssd_usage
-    @explorer.get_cost_and_usage(ssd_usage_query)
-  end
-
-    private
-
-  def instance_type_usage_query(date) 
-    {
-      time_period: {
-        start: date.to_s,
-        end: (date + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["USAGE_QUANTITY"],
-      filter: {
-        and: [
-          {
-            dimensions: {
-              key: "USAGE_TYPE_GROUP",
-              values: ["EC2: Running Hours"]
-            }
-          },
-          {
-            tags: {
-              key: "compute",
-              values: ["true"]
-            }
-          },
-          project_filter
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
-    }
-  end
+  private
 
   def compute_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
     {
@@ -571,127 +573,6 @@ class AwsProject < Project
     }
   end
 
-  def usage_forecast_query
-    {
-      time_period: {
-        start: Date.today.to_s,
-        end: (Date.today + 1).to_s
-      },
-      granularity: "DAILY",
-      metric: "USAGE_QUANTITY",
-      filter: {
-        dimensions: {
-          key: "USAGE_TYPE_GROUP",
-          values: ["EC2: Running Hours"]
-        }
-      }
-    }
-  end
-
-  def cost_forecast_query
-    {
-      time_period: {
-        start: (Date.today).to_s,
-        end: (Date.today + 1).to_s
-      },
-      granularity: "DAILY",
-      metric: "UNBLENDED_COST",
-      filter: {
-        not: {
-          dimensions: {
-            key: "RECORD_TYPE",
-            values: ["CREDIT"]
-          }
-        }
-      }
-    }
-  end
-
-  def rest_of_month_cost_forecast_query
-    {
-      time_period: {
-        start: (Date.today).to_s,
-        end: ((Date.today >> 1) - Date.today.day + 1).to_s
-      },
-      granularity: "MONTHLY",
-      metric: "UNBLENDED_COST",
-      filter: {
-        not: {
-          dimensions: {
-            key: "RECORD_TYPE",
-            values: ["CREDIT"]
-          }
-        }
-      }
-    }
-  end
-
-  def each_instance_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
-    {
-      time_period: {
-        start: start_date.to_s,
-        end: (start_date + 1).to_s
-      },
-      granularity: granularity,
-      metrics: ["UNBLENDED_COST"],
-      filter: {
-        and: [
-          {
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          {
-            not: {
-              dimensions: {
-                key: "RESOURCE_ID",
-                values: excluded_instances
-              }
-            }
-          },
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
-    }
-  end
-
-  def per_instance_compute_instance_type_usage_query(date)
-    {
-      time_period: {
-        start: date.to_s,
-        end: (date + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["USAGE_QUANTITY"],
-      filter: {
-        and: [
-          { 
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          {
-            dimensions: {
-              key: "USAGE_TYPE_GROUP",
-              values: ["EC2: Running Hours"]
-            }
-          },
-          {
-            not: {
-              dimensions: {
-                key: "RESOURCE_ID",
-                values: excluded_instances
-              }
-            }
-          },
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
-    }
-  end
-
   def compute_instance_type_usage_query(date)
     {
       time_period: {
@@ -727,104 +608,6 @@ class AwsProject < Project
     }
   end
 
-  def each_instance_usage_query
-    {
-      time_period: {
-        start: (DEFAULT_DATE).to_s,
-        end: (DEFAULT_DATE + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["USAGE_QUANTITY"],
-      filter: {
-        and: [
-          { 
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          {
-            dimensions: {
-              key: "USAGE_TYPE_GROUP",
-              values: ["EC2: Running Hours"]
-            }
-          },
-          {
-            not: {
-              dimensions: {
-                key: "RESOURCE_ID",
-                values: excluded_instances
-              }
-            }
-          },
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
-    }
-  end
-
-  def instance_usage_query(id)
-    {
-      time_period: {
-        start: (DEFAULT_DATE).to_s,
-        end: (DEFAULT_DATE + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["USAGE_QUANTITY"],
-      filter: {
-        and: [
-          { 
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          { 
-            dimensions: {
-              key: "RESOURCE_ID",
-              values: [id]
-            }
-          },
-          {
-            dimensions: {
-              key: "USAGE_TYPE_GROUP",
-              values: ["EC2: Running Hours"]
-            }
-          }
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
-    }
-  end
-
-  def instance_cost_query(id)
-    {
-      time_period: {
-        start: (DEFAULT_DATE).to_s,
-        end: (DEFAULT_DATE + 1).to_s
-      },
-      granularity: "DAILY",
-      metrics: ["UNBLENDED_COST"],
-      filter: {
-        and: [
-          { 
-            dimensions: {
-              key: "SERVICE",
-              values: ["Amazon Elastic Compute Cloud - Compute"]
-            }
-          },
-          { 
-            dimensions: {
-              key: "RESOURCE_ID",
-              values: [id]
-            }
-          },
-        ]
-      },
-      group_by: [{type: "DIMENSION", key: "RESOURCE_ID"}]
-    }
-  end
-
   def data_out_query(start_date, end_date=start_date + 1, granularity="DAILY")
     {
       time_period: {
@@ -847,36 +630,6 @@ class AwsProject < Project
             }
           },
           project_filter,
-          {
-            not: {
-              dimensions: {
-                key: "RECORD_TYPE",
-                values: ["CREDIT"]
-              }
-            }
-          }
-        ]
-      }
-    }
-  end
-
-  def ssd_usage_query
-    {
-      time_period: {
-        start: (DEFAULT_DATE).to_s,
-        end: (DEFAULT_DATE + 1).to_s
-      },
-      granularity: "MONTHLY",
-      metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
-      filter: {
-        and: [
-          {
-            dimensions: {
-            key: "USAGE_TYPE_GROUP",
-            values: 
-              ["EC2: EBS - SSD(gp2)"]
-            }
-          },
           {
             not: {
               dimensions: {
@@ -969,4 +722,7 @@ class AwsProject < Project
       }
     end
   end
+end
+
+class AwsSdkError < StandardError
 end

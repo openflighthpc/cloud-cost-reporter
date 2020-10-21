@@ -34,7 +34,6 @@ class AzureProject < Project
 
   after_initialize :construct_metadata
   after_initialize :update_region_mappings
-  after_initialize :refresh_auth_token
 
   def tenant_id
     @metadata['tenant_id']
@@ -76,8 +75,53 @@ class AzureProject < Project
     resource_groups.join(", ")
   end
 
+  def validate_credentials
+    puts "Validating Azure project credentials. This may take some time (2-3 mins).\n\n"
+    valid = true
+    @verbose = true
+    begin
+      update_bearer_token
+    rescue => error
+      valid = false
+      puts "#{error}\n\n"
+    end
+
+    begin
+      api_query_active_nodes
+    rescue => error
+      valid = false
+      puts "#{error}\n\n"
+    end
+    
+    begin
+      api_query_cost(Date.today.to_s)
+    rescue => error
+      valid = false
+      puts "#{error}\n\n"
+    end
+
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
+    response = HTTParty.get(
+      uri,
+      headers: { 'Authorization': "Bearer #{bearer_token}" }
+      )
+
+    if !response.success?
+      valid = false
+      puts "Unable to connect to Azure Pricing: #{response}\n\n"
+    end
+
+    if valid
+      puts "Credentials valid for project #{self.name}."
+    else
+      puts "Please double check your credentials and permissions."
+    end
+    valid
+  end
+
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
     @verbose = verbose
+    update_bearer_token
     record_instance_logs(rerun) if date == DEFAULT_DATE
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
@@ -145,6 +189,7 @@ class AzureProject < Project
 
   def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=true)
     @verbose = verbose
+    update_bearer_token
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
@@ -406,9 +451,7 @@ class AzureProject < Project
       vms = response['value']
       vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
     else
-      raise AzureApiError.new("Error querying compute nodes for project #{name}.\n
-                              Error code #{response.code}.\n
-                              #{response if @verbose}")
+      raise AzureApiError.new("Error querying compute nodes for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
     end
   end
 
@@ -434,9 +477,7 @@ class AzureProject < Project
     if response.success?
       details = response['value']
     else
-      raise AzureApiError.new("Error querying daily cost Azure API for project #{name}.\n
-                          Error code #{response.code}.\n
-                          #{response if @verbose}")
+      raise AzureApiError.new("Error querying daily cost Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
     end
   end
 
@@ -462,9 +503,7 @@ class AzureProject < Project
         end
       end
     else
-      raise AzureApiError.new("Error querying node status Azure API for project #{name}.\n
-                              Error code #{response.code}.\n
-                              #{response if @verbose}")
+      raise AzureApiError.new("Error querying node status Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
     end
   end
 
@@ -489,9 +528,7 @@ class AzureProject < Project
       self.metadata = @metadata.to_json
       self.save
     else
-      raise AzureApiError.new("Error obtaining new authorization token for project #{name}.\n
-                              Error code #{response.code}/\n
-                              #{response if @verbose}")
+      raise AzureApiError.new("Error obtaining new authorization token for project #{name}.\nError code #{response.code}\n#{response if @verbose}")
     end
   end
 
@@ -524,8 +561,7 @@ class AzureProject < Project
           end
         end
       else
-        raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n
-                                #{response if @verbose}")
+        raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n#{response if @verbose}")
       end
     end
   end

@@ -29,20 +29,24 @@ require_relative './models/project_factory'
 require 'table_print'
 
 def add_or_update_project(action=nil)
-  factory = ProjectFactory.new
+  @factory = ProjectFactory.new
   if action == nil
-    print "List, add or update project(s) (list/add/update)? "
+    print "List, add or update project(s) (list/add/update/validate)? "
     action = gets.chomp.downcase
   end
-  if action == "update"
+  if action == "update" || action == "validate"
     print "Project name: "
     project_name = gets.chomp
     project = Project.find_by_name(project_name)
     if project == nil
       puts "Project not found. Please try again."
-      return add_or_update_project("update")
+      return add_or_update_project(action)
     end
-    project = factory.as_type(project)
+    project = @factory.as_type(project)
+    if action == "validate"
+      validate_credentials(project)
+      return add_or_update_project
+    end
     puts project.name
     puts "host: #{project.host}"
     puts "start_date: #{project.start_date}"
@@ -85,9 +89,12 @@ def update_attributes(project)
     update_regions(project)
   elsif attribute == "resource_groups" || attribute == "resource groups"
     update_resource_groups(project)
-  else  
+  else
     if attribute == "metadata"
       metadata = JSON.parse(project.metadata)
+      keys = metadata.keys
+      keys = keys - ["regions", "resource_groups", "bearer_token", "bearer_expiry"]
+      puts "Possible keys: #{keys.join(", ")}"
       print "Key name: "
       key = gets.chomp
       print 'Value: '
@@ -112,6 +119,26 @@ def update_attributes(project)
     project.save!
     puts "#{attribute} updated successfully"
   end
+  stop = false
+    while !stop
+      valid = false
+      while !valid
+        print "Would you like to validate the project's credentials (y/n)? "
+        response = gets.chomp.downcase
+        if response == "n"
+          stop = true
+          valid = true
+        elsif response == "y"
+          valid = true
+        else
+          puts "Invalid response. Please try again"
+        end
+      end
+      if !stop
+        validate_credentials(project)
+        stop = true
+      end
+    end
   puts "Would you like to update another field (y/n)?"
   action = gets.chomp.downcase
   if action == "y"
@@ -270,8 +297,13 @@ def add_project
   attributes = {}
   print "Project name: "
   attributes[:name] = gets.chomp
-  print "Host (aws or azure): "
-  attributes[:host] = gets.chomp.downcase
+  valid = false
+  while !valid
+    print "Host (aws or azure): "
+    value = gets.chomp.downcase
+    valid = ["aws", "azure"].include?(value)
+    valid ? attributes[:host] = value : (puts "Invalid selection. Please enter aws or azure.")
+  end
   valid_date = false
   while !valid_date
     print "Start date (YYYY-MM-DD): "
@@ -302,6 +334,9 @@ def add_project
       puts "Invalid date. Please ensure it is in the format YYYY-MM-DD"
     end
   end
+  
+  print "Start date (YYYY-MM-DD): "
+  attributes[:start_date] = gets.chomp
   print "Budget (c.u./month): "
   attributes[:budget] = gets.chomp
   print "Slack Channel: "
@@ -399,6 +434,33 @@ def add_project
   end
   project.save
   puts "Project #{project.name} created"
+  
+  stop = false
+  while !stop
+    valid = false
+    while !valid
+      print "Validate credentials (y/n)? "
+      response = gets.chomp.downcase
+      if response == "n"
+        stop = true
+        valid = true
+      elsif response == "y"
+        valid = true
+      else
+        puts "Invalid response. Please try again"
+      end
+    end
+    if !stop
+      stop = true
+      validate_credentials(project)
+    end
+  end
+end
+
+def validate_credentials(project)
+  project = @factory.as_type(project)
+  project.validate_credentials
+  puts
 end
 
 # for table print
