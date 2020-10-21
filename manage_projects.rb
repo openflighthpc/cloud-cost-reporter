@@ -114,7 +114,11 @@ def add_project
   valid_date = false
   while !valid_date
     print "Start date (YYYY-MM-DD): "
-    valid_date = Date.parse(gets.chomp) rescue false
+    valid_date = begin
+      Date.parse(gets.chomp)
+    rescue ArgumentError
+      false
+    end
     if valid_date
       attributes[:start_date] = valid_date
     else
@@ -126,7 +130,11 @@ def add_project
     print "End date (YYYY-MM-DD). Press enter to leave blank: "
     date = gets.chomp
     break if date == ""
-    valid_date = Date.parse(date) rescue false
+    valid_date = begin
+      Date.parse(date)
+    rescue ArgumentError
+      false
+    end
     if valid_date
       attributes[:start_date] = valid_date
     else
