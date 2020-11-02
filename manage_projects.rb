@@ -31,7 +31,15 @@ require 'table_print'
 def add_or_update_project(action=nil)
   @factory = ProjectFactory.new
   if action == nil
-    print "List, add or update project(s) (list/add/update/validate)? "
+    print <<-ACTIONS
+    - list
+    - add
+    - update
+    - validate
+    - enable
+    - disable
+    ACTIONS
+    print "Please choose an action: "
     action = gets.chomp.downcase
   end
   if action == "update" || action == "validate"
@@ -66,6 +74,20 @@ def add_or_update_project(action=nil)
     {resource_groups: {:display_method => :describe_resource_groups, formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
     puts
     add_or_update_project
+  elsif action == "disable" || action == "enable"
+    print "Project name: "
+    project_name = gets.chomp
+    project = Project.find_by_name(project_name)
+    if !project
+      puts "Project not found. Please try again."
+      return add_or_update_project(action)
+    end
+    project = @factory.as_type(project)
+    if !project.end_date
+      disable_project(project)
+    else
+      enable_project(project)
+    end
   else
     puts "Invalid selection, please try again."
     add_or_update_project
@@ -456,6 +478,19 @@ def add_project
     end
   end
 end
+
+def disable_project(project)
+  project.end_date = Date.today.strftime("%F")
+  project.save!
+  puts "Project '#{project.name} disabled."
+end
+
+def enable_project(project)
+  project.end_date = nil
+  project.save!
+  puts "Project #{project.name} enabled."
+end
+
 
 def validate_credentials(project)
   project = @factory.as_type(project)
