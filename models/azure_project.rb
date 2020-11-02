@@ -539,8 +539,16 @@ class AzureProject < Project
       puts "No region mapping for #{region}, please update 'azure_region_names.txt' and rerun" and return if !value
       value
     end
-    timestamp = Date.parse(File.open('azure_prices.txt').first) rescue false
-    existing_regions = File.open('azure_prices.txt').first(2).last.chomp rescue false
+    timestamp = begin
+      Date.parse(File.open('azure_prices.txt').first) 
+    rescue ArgumentError, Errno::ENOENT
+      false
+    end
+    existing_regions = begin
+      File.open('azure_prices.txt').first(2).last.chomp
+    rescue Errno::ENOENT 
+      false
+    end
     if timestamp == false || Date.today - timestamp >= 1 || existing_regions == false || existing_regions != regions.to_s
       update_bearer_token
       uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
