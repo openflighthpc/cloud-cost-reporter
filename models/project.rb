@@ -122,6 +122,10 @@ class Project < ActiveRecord::Base
   end
 
   def date_valid?(date)
-    Date.parse(date) rescue false
+    begin
+      Date.parse(date)
+    rescue ArgumentError
+      false
+    end
   end
 end

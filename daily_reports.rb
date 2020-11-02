@@ -60,7 +60,11 @@ if ARGV.include?("verbose")
 end
 
 if ARGV[1] && ARGV[1] != "latest"
-  valid = Date.parse(ARGV[1]) rescue false
+  valid = begin
+    Date.parse(ARGV[1])
+  rescue ArgumentError
+    false
+  end
   if !valid
     puts "Provided date invalid"
     return
