@@ -36,7 +36,7 @@ class ProjectFactory
   end
 
   def all_active_projects_as_type
-    Project.active.map { |project| as_type(project) }
+    Project.where(active: 'true').in_date.map { |project| as_type(project) }
   end
 
   def as_type(project)
