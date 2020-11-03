@@ -89,11 +89,13 @@ To assist with generating reports at regular intervals, the `whenever` gem is in
 
 Firstly, `Rakefile` includes `rake` tasks for running both `daily_reports.rb` and `weekly_reports.rb`. If you wish to use these with slack, please enter your slack token at the top of `Rakefile`. These can be edited or new tasks added as needed.
 
-The file `config/schedule.rb` is used to define when to run these tasks. The examples are set for generating daily reports every day at midday and weekly reports at midday every Monday. These can similarly be edited or added to as required. 
+The file `config/schedule.rb` is used to define when to run these tasks. The examples are set for generating daily reports every day at midday and weekly reports at midday every Monday. These can similarly be edited or added to as required. You may wish to also set an output file here using `set :output, filename.log`.
 
-To use these tasks and timings on your system you must run `whenever --update-crontab` which will add approriate entries to your crontab. You must run this each time you update details in `Rakefile` or `config/schedule.rb` for the changes to be reflected.
+To use these tasks and timings on your system you must run `whenever --update-crontab` which will add appropriate entries to your crontab. You must run this each time you update details in `config/schedule.rb` for the changes to be reflected.
 
-If you wish to instead manually add to your crontab, running `whenever` will print out the generated entries without updating your crontab. Please see https://github.com/javan/whenever for more details on using the `whenever` gem.
+If you wish to instead manually add to your crontab, running `whenever` will print out the generated entries without updating your crontab. 
+
+Please see https://github.com/javan/whenever for more details on using the `whenever` gem.
 
 # Operation
 
