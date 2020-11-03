@@ -56,6 +56,11 @@ class Project < ActiveRecord::Base
       in: %w(aws azure),
       message: "%{value} is not a valid host"
     }
+  validates :active,
+    inclusion: {
+      in: %w(true false),
+      message: "%{value} is not a valid state"
+    }
   scope :active, -> { 
     where("end_date > ? OR end_date IS NULL", Date.today).where(
           "start_date <= ?", Date.today)

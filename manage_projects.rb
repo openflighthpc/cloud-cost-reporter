@@ -31,15 +31,7 @@ require 'table_print'
 def add_or_update_project(action=nil)
   @factory = ProjectFactory.new
   if action == nil
-    print <<-ACTIONS
-    - list
-    - add
-    - update
-    - validate
-    - enable
-    - disable
-    ACTIONS
-    print "Please choose an action: "
+    print "List, add, or update project(s) (list/add/update/validate)? "
     action = gets.chomp.downcase
   end
   if action == "update" || action == "validate"
@@ -64,6 +56,7 @@ def add_or_update_project(action=nil)
     puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure?
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
+    puts "active: #{project.active}\n"
     update_attributes(project)
   elsif action == "add"
     add_project
@@ -71,23 +64,10 @@ def add_or_update_project(action=nil)
     formatter = NoMethodMissingFormatter.new
     tp ProjectFactory.new().all_projects_as_type, :id, :name, :host, :budget, :start_date, :end_date,
     :slack_channel, {regions: {:display_method => :describe_regions, formatters: [formatter]}},
-    {resource_groups: {:display_method => :describe_resource_groups, formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
+    {resource_groups: {:display_method => :describe_resource_groups, formatters: [formatter]}}, {filter_level: {formatters: [formatter]}},
+    :active
     puts
     add_or_update_project
-  elsif action == "disable" || action == "enable"
-    print "Project name: "
-    project_name = gets.chomp
-    project = Project.find_by_name(project_name)
-    if !project
-      puts "Project not found. Please try again."
-      return add_or_update_project(action)
-    end
-    project = @factory.as_type(project)
-    if !project.end_date
-      disable_project(project)
-    else
-      enable_project(project)
-    end
   else
     puts "Invalid selection, please try again."
     add_or_update_project
@@ -442,6 +422,7 @@ def add_project
     metadata["resource_groups"] = resource_groups
   end
   attributes[:metadata] = metadata.to_json
+  attributes[:active] = 'true'
   
   project = Project.new(attributes)
   valid = project.valid?
@@ -478,19 +459,6 @@ def add_project
     end
   end
 end
-
-def disable_project(project)
-  project.end_date = Date.today.strftime("%F")
-  project.save!
-  puts "Project '#{project.name} disabled."
-end
-
-def enable_project(project)
-  project.end_date = nil
-  project.save!
-  puts "Project #{project.name} enabled."
-end
-
 
 def validate_credentials(project)
   project = @factory.as_type(project)

@@ -44,7 +44,8 @@ db.execute "CREATE TABLE IF NOT EXISTS projects(
   start_date TEXT,
   end_date TEXT,
   slack_channel TEXT,
-  metadata TEXT
+  metadata TEXT,
+  active TEXT
 )"
 
 db.execute "CREATE TABLE IF NOT EXISTS instance_logs(
