@@ -74,11 +74,6 @@ class Project < ActiveRecord::Base
     self.host.downcase == "azure"
   end
 
-  def active?
-    Date.parse(self.start_date) <= Date.today &&
-    (!self.end_date || Date.parse(self.end_date) > Date.today)
-  end
-
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
   end
 
