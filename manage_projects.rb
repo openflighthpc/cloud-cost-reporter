@@ -56,7 +56,6 @@ def add_or_update_project(action=nil)
     puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure?
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
-    puts "active: #{project.active}\n"
     update_attributes(project)
   elsif action == "add"
     add_project
