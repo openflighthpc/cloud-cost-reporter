@@ -63,7 +63,7 @@ This bot must be invited to each project's chosen slack channel.
 
 ### Adding and updating projects
 
-A `Project` object should be created for each project you wish to track. These can be created by running `ruby manage_projects.rb` and following the prompts in the command line. This file can also be used to update existing projects. Projects should not be deleted, but instead their `end_date` set to mark them as inactive.
+A `Project` object should be created for each project you wish to track. These can be created by running `ruby manage_projects.rb` and following the prompts in the command line. This file can also be used to update existing projects. Projects should not be deleted, but instead their `active` attribute set to `false` to mark them as inactive.
 
 ### Adding customer friendly instance type names
 
