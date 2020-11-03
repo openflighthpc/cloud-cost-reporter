@@ -83,6 +83,18 @@ Both AWS and Azure use non standard region names in their pricing APIs/SDKs. To 
 
 For AWS projects, a missing mapping will be highlighted when adding regions using `update_projects.rb` and for Azure projects a missing mapping will be highlighted when generating a weekly report. At the time of writing, AWS mappings can be found at https://docs.aws.amazon.com/general/latest/gr/rande.html#ec2_region but unfortunately Azure do not publicly provide such a list.
 
+### Timed report generation
+
+To assist with generating reports at regular intervals, the `whenever` gem is included for automated creation of suitable crontab entries.
+
+Firstly, `Rakefile` includes `rake` tasks for running both `daily_reports.rb` and `weekly_reports.rb`. If you wish to use these with slack, please enter your slack token at the top of `Rakefile`. These can be edited or new tasks added as needed.
+
+The file `config/schedule.rb` is used to define when to run these tasks. The examples are set for generating daily reports every day at midday and weekly reports at midday every Monday. These can similarly be edited or added to as required. 
+
+To use these tasks and timings on your system you must run `whenever --update-crontab` which will add approriate entries to your crontab. You must run this each time you update details in `Rakefile` or `config/schedule.rb` for the changes to be reflected.
+
+If you wish to instead manually add to your crontab, running `whenever` will print out the generated entries without updating your crontab. Please see https://github.com/javan/whenever for more details on using the `whenever` gem.
+
 # Operation
 
 The application includes functionality for generating both daily and weekly reports of cloud usage and cost data. The obtained data is saved in the database and, unless specified, queries where an existing report exists will use stored data instead of making fresh sdk/api calls.

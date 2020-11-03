@@ -1,3 +1,4 @@
+# update with your token
 slack_token = ""
 
 desc 'Run daily reports'
