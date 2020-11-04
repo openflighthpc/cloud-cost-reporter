@@ -56,7 +56,12 @@ class Project < ActiveRecord::Base
       in: %w(aws azure),
       message: "%{value} is not a valid host"
     }
-  scope :active, -> { 
+  validates :active,
+    inclusion: {
+      in: %w(true false),
+      message: "%{value} is not a valid state"
+    }
+  scope :in_date, -> { 
     where("end_date > ? OR end_date IS NULL", Date.today).where(
           "start_date <= ?", Date.today)
   }
@@ -67,11 +72,6 @@ class Project < ActiveRecord::Base
 
   def azure?
     self.host.downcase == "azure"
-  end
-
-  def active?
-    Date.parse(self.start_date) <= Date.today &&
-    (!self.end_date || Date.parse(self.end_date) > Date.today)
   end
 
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)

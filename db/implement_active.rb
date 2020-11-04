@@ -25,21 +25,15 @@
 # https://github.com/openflighthpc/cloud-cost-reporter
 #==============================================================================
 
-require_relative 'aws_project'
-require_relative 'azure_project'
-require_relative 'cost_log'
-require_relative 'instance_log'
+require 'sqlite3'
+load './models/project.rb'
 
-class ProjectFactory
-  def all_projects_as_type
-    Project.all.map { |project| as_type(project) }
-  end
+db = SQLite3::Database.open 'db/cost_tracker.sqlite3'
 
-  def all_active_projects_as_type
-    Project.where(active: 'true').in_date.map { |project| as_type(project) }
-  end
+db.execute "ALTER TABLE projects
+            ADD active TEXT
+"
 
-  def as_type(project)
-    project.aws? ? AwsProject.find(project.id) : AzureProject.find(project.id)
-  end
-end
+db.execute "UPDATE projects
+            SET active = 'true'
+"

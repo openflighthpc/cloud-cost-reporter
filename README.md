@@ -63,7 +63,7 @@ This bot must be invited to each project's chosen slack channel.
 
 ### Adding and updating projects
 
-A `Project` object should be created for each project you wish to track. These can be created by running `ruby manage_projects.rb` and following the prompts in the command line. This file can also be used to update existing projects. Projects should not be deleted, but instead their `end_date` set to mark them as inactive.
+A `Project` object should be created for each project you wish to track. These can be created by running `ruby manage_projects.rb` and following the prompts in the command line. This file can also be used to update existing projects. Projects should not be deleted, but instead their `active` attribute set to `false` to mark them as inactive.
 
 ### Adding customer friendly instance type names
 
@@ -165,6 +165,10 @@ To get all projects' weekly reports for a specific day, with only text output, t
 For the weekly report, future costs are estimated based on the active compute nodes and their daily costs, using pricing from AWS and Azure respectively. For Azure, the Ratecard api used here returns a very large list of prices, with extremely limited serverside filtering available. To prevent excessive waits for this request each time `weekly_reports.rb` is run, this price list is saved to a text file, `azure_prices.txt`. This includes a timestamp, and when generating Azure weekly reports, if less than a day old, the data is read directly from the file rather than making another api request.
 
 You can also run `ruby get_latest_azure_prices.rb`, which will use an existing Azure project (which provides the required credentials for the API) to run this update to the prices on command. By setting up a cronjob to run this separately from the main files (for example, at the start of each day), wait times for generating Azure weekly reports can be dramatically reduced.
+
+## Enabling/disabling projects
+
+By default, projects are created in the 'active' state. To disable (or re-enable) a project, choose the appropriate option from the application entrypoint script. If a project is disabled, it will not have any daily or weekly reports sent. It will still, however, be listed when the `list` entrypoint is run.
 
 # Contributing
 
