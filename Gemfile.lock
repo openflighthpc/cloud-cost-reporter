@@ -33,6 +33,7 @@ GEM
       aws-sigv4 (~> 1.1)
     aws-sigv4 (1.2.2)
       aws-eventstream (~> 1, >= 1.0.2)
+    chronic (0.10.2)
     concurrent-ruby (1.1.7)
     httparty (0.18.1)
       mime-types (~> 3.0)
@@ -45,11 +46,14 @@ GEM
     mime-types-data (3.2020.0512)
     minitest (5.14.2)
     multi_xml (0.6.0)
+    rake (12.3.0)
     sqlite3 (1.4.2)
     table_print (1.5.7)
     thread_safe (0.3.6)
     tzinfo (1.2.7)
       thread_safe (~> 0.1)
+    whenever (1.0.0)
+      chronic (>= 0.6.3)
     zeitwerk (2.4.0)
 
 PLATFORMS
@@ -63,8 +67,10 @@ DEPENDENCIES
   aws-sdk-ec2
   aws-sdk-pricing
   httparty
+  rake
   sqlite3
   table_print
+  whenever
 
 RUBY VERSION
    ruby 2.5.1p57
