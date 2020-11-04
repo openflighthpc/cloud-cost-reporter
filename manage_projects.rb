@@ -335,8 +335,6 @@ def add_project
     end
   end
   
-  print "Start date (YYYY-MM-DD): "
-  attributes[:start_date] = gets.chomp
   print "Budget (c.u./month): "
   attributes[:budget] = gets.chomp
   print "Slack Channel: "
