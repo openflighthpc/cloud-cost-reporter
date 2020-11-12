@@ -78,7 +78,7 @@ class Project < ActiveRecord::Base
   def current_budget
     return 0 if !active?
 
-    latest = self.budgets.where(:effective_at <= Date.today).last
+    latest = self.budgets.where("effective_at <= ? ", Date.today).last
     latest ? latest.amount : 0
   end
 

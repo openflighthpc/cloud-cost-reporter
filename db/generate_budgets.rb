@@ -38,19 +38,18 @@ db.execute "CREATE TABLE IF NOT EXISTS budgets(
   timestamp TEXT
   )"
 
-Project.all.each do |project|
-  if project.budgets.length == 0
-    Budget.create(
-    {
-      project_id: project.id,
-      amount: project.budget,
-      effective_at: project.start_date,
-      timestamp: Time.now
-    })
+if Project.new().respond_to?(:budget)
+  Project.all.each do |project|
+    if project.budgets.length == 0
+      Budget.create({
+        project_id: project.id,
+        amount: project.budget,
+        effective_at: project.start_date,
+        timestamp: Time.now
+      })
+    end
   end
-end
 
-if Project.first.budget != nil
   db.execute "ALTER TABLE projects RENAME TO projects_old;"
   db.execute "CREATE TABLE projects( 
       name TEXT,
