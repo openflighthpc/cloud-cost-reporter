@@ -31,6 +31,7 @@ require_relative 'weekly_report_log'
 require_relative 'cost_log'
 require_relative 'instance_log'
 require_relative 'usage_log'
+require_relative 'budget'
 
 ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
 
@@ -42,10 +43,10 @@ class Project < ActiveRecord::Base
   has_many :instance_logs
   has_many :weekly_report_logs
   has_many :usage_logs
+  has_many :budgets
 
   validates :name, presence: true, uniqueness: true
   validates :slack_channel, presence: true
-  validates :budget, numericality: true
   validates :start_date, presence: true
   validate :start_date_valid, on: [:update, :create]
   validate :end_date_valid, on: [:update, :create], if: -> { end_date != nil }
@@ -72,6 +73,13 @@ class Project < ActiveRecord::Base
   def active?
     Date.parse(self.start_date) <= Date.today &&
     (!self.end_date || Date.parse(self.end_date) > Date.today)
+  end
+
+  def current_budget
+    return 0 if !active?
+
+    latest = self.budgets.where(:effective_at <= Date.today).last
+    latest ? latest.amount : 0
   end
 
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
