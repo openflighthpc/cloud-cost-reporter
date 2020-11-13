@@ -471,7 +471,7 @@ def add_budget(project)
     print "Budget amount (c.u./month): "
     amount = gets.chomp
     valid = begin
-      !!Integer(amount, 10)
+      Integer(amount, 10)
     rescue ArgumentError, TypeError
       false
     end

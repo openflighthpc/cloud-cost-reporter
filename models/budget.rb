@@ -32,8 +32,7 @@ ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_t
 class Budget < ActiveRecord::Base
   belongs_to :project
   default_scope { order(:effective_at, timestamp: :asc) }
-  validates :amount, numericality: true
-  validates :amount, presence: true
+  validates :amount, numericality: true, presence: true
   validates :effective_at, presence: true
   validate :effective_at_valid, on: [:update, :create]
 
