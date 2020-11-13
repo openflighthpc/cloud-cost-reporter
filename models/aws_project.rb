@@ -209,7 +209,7 @@ class AwsProject < Project
       daily_future_cu = (future_costs * CostLog::USD_GBP_CONVERSION * 24 * 10 * 1.25).ceil
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
-      remaining_budget = self.budget.to_i - total_costs
+      remaining_budget = self.current_budget.to_i - total_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
       instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
       time_lag = (instances_date.to_date - date).to_i
@@ -220,7 +220,7 @@ class AwsProject < Project
       msg = [
       "#{date_warning if date_warning}",
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
-      "*Monthly Budget:* #{self.budget} compute units",
+      "*Monthly Budget:* #{self.current_budget} compute units",
       "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
       "*Data Egress Costs for #{date_range}:* #{data_egress_costs} compute units (#{data_egress_amount} GB)",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",

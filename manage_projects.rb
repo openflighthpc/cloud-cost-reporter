@@ -51,7 +51,7 @@ def add_or_update_project(action=nil)
     puts "host: #{project.host}"
     puts "start_date: #{project.start_date}"
     puts "end_date: #{project.end_date}"
-    puts "budget: #{project.budget}c.u./month"
+    puts "budget: #{project.current_budget}c.u./month"
     puts "regions: #{project.regions.join(", ")}" if project.aws?
     puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure?
     puts "slack_channel: #{project.slack_channel}"
@@ -61,7 +61,7 @@ def add_or_update_project(action=nil)
     add_project
   elsif action == "list"
     formatter = NoMethodMissingFormatter.new
-    tp ProjectFactory.new().all_projects_as_type, :id, :name, :host, :budget, :start_date, :end_date,
+    tp ProjectFactory.new().all_projects_as_type, :id, :name, :host, :current_budget, :start_date, :end_date,
     :slack_channel, {regions: {:display_method => :describe_regions, formatters: [formatter]}},
     {resource_groups: {:display_method => :describe_resource_groups, formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
     puts
@@ -78,7 +78,7 @@ def update_attributes(project)
   while !valid
     puts "What would you like to update (for security related attributes please select metadata)? "
     attribute = gets.chomp
-    if project.respond_to?(attribute.downcase)
+    if project.respond_to?(attribute.downcase) || attribute == "budget"
       valid = true
     else
       puts "That is not a valid attribute for this project. Please try again."
@@ -89,6 +89,8 @@ def update_attributes(project)
     update_regions(project)
   elsif attribute == "resource_groups" || attribute == "resource groups"
     update_resource_groups(project)
+  elsif attribute == "budget"
+    add_budget(project)
   else
     if attribute == "metadata"
       metadata = JSON.parse(project.metadata)
@@ -335,10 +337,8 @@ def add_project
     end
   end
   
-  print "Start date (YYYY-MM-DD): "
-  attributes[:start_date] = gets.chomp
   print "Budget (c.u./month): "
-  attributes[:budget] = gets.chomp
+  budget = gets.chomp
   print "Slack Channel: "
   attributes[:slack_channel] = gets.chomp
 
@@ -433,6 +433,8 @@ def add_project
     valid = project.valid?
   end
   project.save
+
+  Budget.create(project_id: project.id, amount: budget, effective_at: project.start_date, timestamp: Time.now)
   puts "Project #{project.name} created"
   
   stop = false
@@ -461,6 +463,34 @@ def validate_credentials(project)
   project = @factory.as_type(project)
   project.validate_credentials
   puts
+end
+
+def add_budget(project)
+  valid = false
+  while !valid
+    print "Budget amount (c.u./month): "
+    amount = gets.chomp
+    valid = begin
+      Integer(amount, 10)
+    rescue ArgumentError, TypeError
+      false
+    end
+    puts "Please enter a number" if !valid
+  end
+
+  valid_date = false
+  while !valid_date
+    print "Effective at (YYYY-MM-DD): "
+    valid_date = begin
+      Date.parse(gets.chomp)
+    rescue ArgumentError
+      false
+    end
+    puts "Invalid date. Please ensure it is in the format YYYY-MM-DD" if !valid_date
+  end
+  budget = Budget.new(project_id: project.id, amount: amount, effective_at: valid_date, timestamp: Time.now)
+  budget.save!
+  puts "Budget created"
 end
 
 # for table print
