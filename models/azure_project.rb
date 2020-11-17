@@ -30,7 +30,6 @@ require_relative 'project'
 
 class AzureProject < Project
   @@prices = {}
-  @@sizes = {}
   @@region_mappings = {}
 
   after_initialize :construct_metadata
@@ -590,8 +589,8 @@ class AzureProject < Project
     end
 
     if timestamp == false || Date.today - timestamp >= 1 || existing_regions == false || existing_regions != regions.to_s
-    update_bearer_token
-    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/skus?api-version=2019-04-01"
+      update_bearer_token
+      uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/skus?api-version=2019-04-01"
       response = HTTParty.get(
         uri,
         headers: { 'Authorization': "Bearer #{bearer_token}" }
@@ -605,7 +604,8 @@ class AzureProject < Project
             details = {
               instance_type: instance["name"], instance_family: instance["family"],
               location: instance["locations"][0],
-              cpu: 0, gpu: 0, mem: 0}
+              cpu: 0, gpu: 0, mem: 0
+            }
             instance["capabilities"].each do |capability|
               if capability["name"] == "MemoryGB"
                 details[:mem] = capability["value"].to_f

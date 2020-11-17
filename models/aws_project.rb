@@ -531,11 +531,11 @@ class AwsProject < Project
           File.write('aws_instance_details.txt', "#{Time.now}\n")
           File.write('aws_instance_details.txt', "#{regions}\n", mode: "a")
         end
-        first = true
+        first_query = true
         results = nil
-        while first || results&.next_token
+        while first_query || results&.next_token
           begin
-            results = @pricing_checker.get_products(general_pricing_query(region, results&.next_token))
+            results = @pricing_checker.get_products(instances_info_query(region, results&.next_token))
           rescue Aws::EC2::Errors::ServiceError => error
             raise AwsSdkError.new("Unable to determine AWS instances in region #{region}. #{error}")
           end
@@ -555,8 +555,8 @@ class AwsProject < Project
               gpu: attributes["gpu"] ? attributes["gpu"].to_i : 0
             }
             File.write('aws_instance_details.txt', "#{info.to_json}\n", mode: 'a')
-            first = false
           end
+          first_query = false
         end
       end
     end
@@ -734,7 +734,7 @@ class AwsProject < Project
     }
   end
 
-  def general_pricing_query(region, token=nil)
+  def instances_info_query(region, token=nil)
     details = {
       service_code: "AmazonEC2",
       filters: [ 
