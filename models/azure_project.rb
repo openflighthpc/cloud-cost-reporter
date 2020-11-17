@@ -30,6 +30,7 @@ require_relative 'project'
 
 class AzureProject < Project
   @@prices = {}
+  @@sizes = {}
   @@region_mappings = {}
 
   after_initialize :construct_metadata
@@ -570,6 +571,56 @@ class AzureProject < Project
         end
       else
         raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n#{response if @verbose}")
+      end
+    end
+  end
+
+  def get_instance_sizes
+    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region).sort
+
+    timestamp = begin
+      Date.parse(File.open('azure_sizes.txt').first) 
+    rescue ArgumentError, Errno::ENOENT
+      false
+    end
+    existing_regions = begin
+      File.open('azure_sizes.txt').first(2).last.chomp
+    rescue Errno::ENOENT 
+      false
+    end
+
+    if timestamp == false || Date.today - timestamp >= 1 || existing_regions == false || existing_regions != regions.to_s
+    update_bearer_token
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/skus?api-version=2019-04-01"
+      response = HTTParty.get(
+        uri,
+        headers: { 'Authorization': "Bearer #{bearer_token}" }
+      )
+
+      if response.success?
+        File.write('azure_sizes.txt', "#{Time.now}\n")
+        File.write('azure_sizes.txt', "#{regions}\n", mode: "a")
+        response["value"].each do |instance|
+          if instance["resourceType"] == "virtualMachines" && regions.include?(instance["locations"][0])
+            details = {
+              instance_type: instance["name"], instance_family: instance["family"],
+              location: instance["locations"][0],
+              cpu: 0, gpu: 0, mem: 0}
+            instance["capabilities"].each do |capability|
+              if capability["name"] == "MemoryGB"
+                details[:mem] = capability["value"]
+              elsif capability["name"] == "vCPUsAvailable"
+                details[:cpu] = capability["value"]
+              elsif capability["name"] == "GPUs"
+                details[:gpu] = capability["value"]
+              end
+            end
+            File.write("azure_sizes.txt", details.to_json, mode: "a")
+            File.write("azure_sizes.txt", "\n", mode: "a")
+          end
+        end
+      else
+        raise AzureApiError.new("Error obtaining latest Azure instance list. Error code #{response.code}.\n#{response if @verbose}")
       end
     end
   end
