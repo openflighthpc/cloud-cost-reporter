@@ -536,7 +536,7 @@ class AwsProject < Project
         while first_query || results&.next_token
           begin
             results = @pricing_checker.get_products(instances_info_query(region, results&.next_token))
-          rescue Aws::EC2::Errors::ServiceError => error
+          rescue Aws::Pricing::Errors::ServiceError => error
             raise AwsSdkError.new("Unable to determine AWS instances in region #{region}. #{error}")
           end
           results.price_list.each do |result|
