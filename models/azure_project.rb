@@ -606,10 +606,11 @@ class AzureProject < Project
               location: instance["locations"][0],
               cpu: 0, gpu: 0, mem: 0
             }
+
             instance["capabilities"].each do |capability|
               if capability["name"] == "MemoryGB"
                 details[:mem] = capability["value"].to_f
-              elsif capability["name"] == "vCPUsAvailable"
+              elsif capability["name"] == "vCPUs"
                 details[:cpu] = capability["value"].to_i
               elsif capability["name"] == "GPUs"
                 details[:gpu] = capability["value"].to_i
