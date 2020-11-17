@@ -600,7 +600,8 @@ class AzureProject < Project
         File.write('azure_instance_sizes.txt', "#{Time.now}\n")
         File.write('azure_instance_sizes.txt', "#{regions}\n", mode: "a")
         response["value"].each do |instance|
-          if instance["resourceType"] == "virtualMachines" && regions.include?(instance["locations"][0])
+          if instance["resourceType"] == "virtualMachines" && regions.include?(instance["locations"][0]) &&
+            instance["name"].include?("Standard")
             details = {
               instance_type: instance["name"], instance_family: instance["family"],
               location: instance["locations"][0],
