@@ -511,6 +511,107 @@ class AwsProject < Project
     @explorer.get_cost_and_usage(data_out_query(date))
   end
 
+  def get_aws_instance_info
+    regions = InstanceLog.where(host: "AWS").select(:region).distinct.pluck(:region).sort
+
+    timestamp = begin
+      Date.parse(File.open('aws_instance_details2.txt').first) 
+    rescue ArgumentError, Errno::ENOENT
+      false
+    end
+    existing_regions = begin
+      File.open('aws_instance_details2.txt').first(2).last.chomp
+    rescue Errno::ENOENT 
+      false
+    end
+
+    if timestamp == false || Date.today - timestamp >= 1 || existing_regions == false || existing_regions != regions.to_s
+      regions.each.with_index do |region, index|
+        if index == 0
+          File.write('aws_instance_details2.txt', "#{Time.now}\n")
+          File.write('aws_instance_details2.txt', "#{regions}\n", mode: "a")
+        end
+        first = true
+        results = nil
+        while first || results&.next_token
+          results = @pricing_checker.get_products(general_pricing_query(region, results&.next_token))
+          results.price_list.each do |result|
+            details = JSON.parse(result)
+            attributes = details["product"]["attributes"]
+            price = details["terms"]["OnDemand"]
+            price = price[price.keys[0]]["priceDimensions"]
+            price = price[price.keys[0]]["pricePerUnit"]["USD"].to_f
+            mem = attributes["memory"].gsub(" GiB", "")
+            info = {
+              instance_type: attributes["instanceType"],
+              location: region, 
+              price_per_hour: price,
+              cpu: attributes["vcpu"].to_i,
+              mem: mem.to_f,
+              gpu: attributes["gpu"] ? attributes["gpu"].to_i : 0
+            }
+            File.write('aws_instance_details2.txt', "#{info.to_json}\n", mode: 'a')
+            first = false
+          end
+        end
+      end
+    end
+  end
+
+  def self.get_aws_instance_info
+    regions = InstanceLog.where(host: "AWS").select(:region).distinct.pluck(:region).sort
+
+    timestamp = begin
+      Date.parse(File.open('aws_instance_details.txt').first) 
+    rescue ArgumentError, Errno::ENOENT
+      false
+    end
+    existing_regions = begin
+      File.open('aws_instance_details.txt').first(2).last.chomp
+    rescue Errno::ENOENT 
+      false
+    end
+
+    if timestamp == false || Date.today - timestamp >= 1 || existing_regions == false || existing_regions != regions.to_s
+      regions.each_with_index do |region, i|
+        uri = "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/#{region}/index.csv"
+        response = HTTParty.get(uri)
+
+        if response.success?
+          if i == 0
+            File.write('aws_instance_details.txt', "#{Time.now}\n")
+            File.write('aws_instance_details.txt', "#{regions}\n", mode: "a")
+          end
+          response.each_line.with_index do |entry, j|
+            if j > 5
+              details = entry.split(",")
+              if details[3] == '"OnDemand"' && details[36] == '"Shared"' && details[38] == '"Linux"' && 
+                 details[47].include?("BoxUsage") && details[77] == '"NA"'
+                gpu = details[54].gsub('"', '')
+                gpu = gpu == '' ? 0 : gpu.to_i
+                mem = details[25].gsub('"', '').gsub(' GiB', '')
+                mem = mem.to_f
+                cpu = details[22].gsub('"', '')
+                cpu = cpu.to_i
+                price = details[9].gsub('"', '')
+                price = price.to_f
+                info = {
+                  instance_type: details[19].gsub('"', ''), location: region, 
+                  price_per_hour: price, cpu: cpu,
+                  mem: mem, gpu: gpu
+                }
+                File.write("aws_instance_details.txt", info.to_json, mode: "a")
+                File.write("aws_instance_details.txt", "\n", mode: "a")
+              end
+            end
+          end
+        else
+          raise AwsApiError.new("Error obtaining latest AWS instance list. Error code #{response.code}.\n#{response}")
+        end
+      end
+    end
+  end
+
   private
 
   def compute_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
@@ -683,6 +784,42 @@ class AwsProject < Project
     }
   end
 
+  def general_pricing_query(region, token=nil)
+    details = {
+      service_code: "AmazonEC2",
+      filters: [ 
+        {
+          field: "location", 
+          type: "TERM_MATCH", 
+          value: @@region_mappings[region], 
+        },
+        {
+          field: "tenancy",
+          type: "TERM_MATCH",
+          value: "shared"
+        },
+        {
+          field: "capacitystatus",
+          type: "TERM_MATCH",
+          value: "UnusedCapacityReservation"
+        },
+        {
+          field: "operatingSystem",
+          type: "TERM_MATCH",
+          value: "linux"
+        },
+        {
+          field: "preInstalledSW",
+          type: "TERM_MATCH", 
+          value: "NA"
+        }
+     ], 
+     format_version: "aws_v1"
+    }
+    details[:next_token] = token if token
+    details
+  end
+
   def project_instances_query
     if filter_level == "tag"
       {
@@ -725,4 +862,7 @@ class AwsProject < Project
 end
 
 class AwsSdkError < StandardError
+end
+
+class AwsSpiError < StandardError
 end

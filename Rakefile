@@ -20,3 +20,8 @@ desc 'Get latest azure instance sizes'
 task :azure_instance_sizes do
   system("ruby get_latest_azure_instance_sizes.rb")
 end
+
+desc 'Get latest aws instance sizes and prices'
+task :aws_instance_info do
+  system("ruby get_latest_aws_instance_info.rb")
+end

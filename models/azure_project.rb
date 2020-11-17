@@ -608,11 +608,11 @@ class AzureProject < Project
               cpu: 0, gpu: 0, mem: 0}
             instance["capabilities"].each do |capability|
               if capability["name"] == "MemoryGB"
-                details[:mem] = capability["value"]
+                details[:mem] = capability["value"].to_f
               elsif capability["name"] == "vCPUsAvailable"
-                details[:cpu] = capability["value"]
+                details[:cpu] = capability["value"].to_i
               elsif capability["name"] == "GPUs"
-                details[:gpu] = capability["value"]
+                details[:gpu] = capability["value"].to_i
               end
             end
             File.write("azure_sizes.txt", details.to_json, mode: "a")
