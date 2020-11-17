@@ -597,8 +597,8 @@ class AzureProject < Project
       )
 
       if response.success?
-        File.write('azure_sizes.txt', "#{Time.now}\n")
-        File.write('azure_sizes.txt', "#{regions}\n", mode: "a")
+        File.write('azure_instance_sizes.txt', "#{Time.now}\n")
+        File.write('azure_instance_sizes.txt', "#{regions}\n", mode: "a")
         response["value"].each do |instance|
           if instance["resourceType"] == "virtualMachines" && regions.include?(instance["locations"][0])
             details = {
@@ -615,8 +615,8 @@ class AzureProject < Project
                 details[:gpu] = capability["value"].to_i
               end
             end
-            File.write("azure_sizes.txt", details.to_json, mode: "a")
-            File.write("azure_sizes.txt", "\n", mode: "a")
+            File.write("azure_instance_sizes.txt", details.to_json, mode: "a")
+            File.write("azure_instance_sizes.txt", "\n", mode: "a")
           end
         end
       else
