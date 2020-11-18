@@ -578,12 +578,12 @@ class AzureProject < Project
     regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region).sort
 
     timestamp = begin
-      Date.parse(File.open('azure_sizes.txt').first) 
+      Date.parse(File.open('azure_instance_sizes.txt').first) 
     rescue ArgumentError, Errno::ENOENT
       false
     end
     existing_regions = begin
-      File.open('azure_sizes.txt').first(2).last.chomp
+      File.open('azure_instance_sizes.txt').first(2).last.chomp
     rescue Errno::ENOENT 
       false
     end
@@ -595,7 +595,7 @@ class AzureProject < Project
         uri,
         headers: { 'Authorization': "Bearer #{bearer_token}" }
       )
-
+      
       if response.success?
         File.write('azure_instance_sizes.txt', "#{Time.now}\n")
         File.write('azure_instance_sizes.txt', "#{regions}\n", mode: "a")
