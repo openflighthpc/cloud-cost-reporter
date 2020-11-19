@@ -47,5 +47,5 @@ InstanceMapping.create(instance_type: "Standard_NC6s_v3", customer_facing_name: 
 InstanceMapping.create(instance_type: "Standard_NC24s_v3", customer_facing_name: "GPU (Medium)")
 InstanceMapping.create(instance_type: "Standard_E2_v4", customer_facing_name: "Mem (Small)")
 InstanceMapping.create(instance_type: "Standard_E4_v4", customer_facing_name: "Mem (Medium)")
-InstanceMapping.create(instance_type: "Standard_E8_v2", customer_facing_name: "Mem (Large)")
+InstanceMapping.create(instance_type: "Standard_E8_v4", customer_facing_name: "Mem (Large)")
 InstanceMapping.create(instance_type: "Standard_B2s", customer_facing_name: "General (Small)")

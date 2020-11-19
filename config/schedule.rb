@@ -23,6 +23,12 @@ every :day, at: '12pm' do
   rake "daily_reports"
 end
 
+every :day, at: '12am' do
+  rake "azure_prices"
+  rake "azure_instance_sizes"
+  rake "aws_instance_info"
+end
+
 every :monday, at: '12pm' do
   rake "weekly_reports"
 end
