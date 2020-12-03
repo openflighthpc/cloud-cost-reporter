@@ -28,7 +28,7 @@
 require_relative './models/aws_project.rb'
 
 # Need AWS credentials to get instance list, so use a project in database.
-project = AwsProject.where(host: 'azure').first
+project = AwsProject.where(host: 'aws').first
 if !project
   puts "No AWS projects in database to retrieve instances details"
 else
