@@ -587,8 +587,7 @@ class AzureProject < Project
   end
 
   def get_prices
-    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region)
-    regions << "uksouth" if !regions.include?("uksouth")
+    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region) | ["uksouth"]
     regions.sort!
 
     regions.map! do |region|
@@ -645,8 +644,7 @@ class AzureProject < Project
   end
 
   def get_instance_sizes
-    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region)
-    regions << "uksouth" if !regions.include?("uksouth")
+    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region) | ["uksouth"]
     regions.sort!
 
     timestamp = begin
