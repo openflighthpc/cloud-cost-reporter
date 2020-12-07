@@ -587,7 +587,10 @@ class AzureProject < Project
   end
 
   def get_prices
-    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region).sort
+    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region)
+    regions << "uksouth" if !regions.include?("uksouth")
+    regions.sort!
+
     regions.map! do |region|
       value = @@region_mappings[region]
       puts "No region mapping for #{region}, please update 'azure_region_names.txt' and rerun" and return if !value
@@ -642,7 +645,9 @@ class AzureProject < Project
   end
 
   def get_instance_sizes
-    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region).sort
+    regions = InstanceLog.where(host: "Azure").select(:region).distinct.pluck(:region)
+    regions << "uksouth" if !regions.include?("uksouth")
+    regions.sort!
 
     timestamp = begin
       Date.parse(File.open('azure_instance_sizes.txt').first) 
