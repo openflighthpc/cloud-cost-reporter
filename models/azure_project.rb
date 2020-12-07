@@ -29,6 +29,8 @@ require 'httparty'
 require_relative 'project'
 
 class AzureProject < Project
+  MAX_API_ATTEMPTS = 3
+  DEFAULT_TIMEOUT = 180
   @@prices = {}
   @@region_mappings = {}
 
@@ -121,7 +123,7 @@ class AzureProject < Project
 
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
     @verbose = verbose
-    update_bearer_token
+    refresh_auth_token
     record_instance_logs(rerun) if date == DEFAULT_DATE
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
@@ -189,7 +191,7 @@ class AzureProject < Project
 
   def weekly_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=true)
     @verbose = verbose
-    update_bearer_token
+    refresh_auth_token
     report = self.weekly_report_logs.find_by(date: date)
     msg = ""
     if report == nil || rerun
@@ -389,7 +391,7 @@ class AzureProject < Project
     data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
     data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")
     data_out_figures = nil
-    # only make query if don't already have data in logs or asked to recalculate
+    # only calculate if don't already have data in logs, or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
       data_out_costs = cost_entries.select do |cost|
         cost['properties']["additionalInfo"] &&
@@ -441,18 +443,31 @@ class AzureProject < Project
     query = {
       'api-version': '2020-06-01',
     }
-    response = HTTParty.get(
-      uri,
-      query: query,
-      headers: { 'Authorization': "Bearer #{bearer_token}" }
-    )
+    attempt = 0
+    begin
+      attempt += 1
+      response = HTTParty.get(
+        uri,
+        query: query,
+        headers: { 'Authorization': "Bearer #{bearer_token}" },
+        timeout: DEFAULT_TIMEOUT
+      )
 
-    if response.success?
-      vms = response['value']
-      vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
-    else
-      raise AzureApiError.new("Error querying compute nodes for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
-    end
+      if response.success?
+        vms = response['value']
+        vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
+      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+        raise Net::ReadTimeout
+      else
+        raise AzureApiError.new("Error querying compute nodes for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
+      end
+    rescue Net::ReadTimeout
+      if attempt < MAX_API_ATTEMPTS
+        retry
+      else
+        raise AzureApiError.new("Timeout error querying compute nodes for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+      end
+    end 
   end
 
   def api_query_cost(start_date, end_date=start_date)
@@ -469,16 +484,29 @@ class AzureProject < Project
       'api-version': '2019-10-01',
       '$filter': "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}' #{resource_groups_conditional}"
     }
-    response = HTTParty.get(
-      uri,
-      query: query,
-      headers: { 'Authorization': "Bearer #{bearer_token}" }
-    )
-    if response.success?
-      details = response['value']
-    else
-      raise AzureApiError.new("Error querying daily cost Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
-    end
+    attempt = 0
+    begin
+      attempt += 1
+      response = HTTParty.get(
+        uri,
+        query: query,
+        headers: { 'Authorization': "Bearer #{bearer_token}" },
+        timeout: DEFAULT_TIMEOUT
+      )
+      if response.success?
+        details = response['value']
+      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+        raise Net::ReadTimeout
+      else
+        raise AzureApiError.new("Error querying daily cost Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
+      end
+    rescue Net::ReadTimeout
+      if attempt < MAX_API_ATTEMPTS
+        retry
+      else
+        raise AzureApiError.new("Timeout error querying daily cost Azure API for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+      end
+    end 
   end
 
   def api_query_active_nodes
@@ -487,48 +515,74 @@ class AzureProject < Project
       'api-version': '2020-05-01',
       '$filter': "resourceType eq 'Microsoft.Compute/virtualMachines'"
     }
-    response = HTTParty.get(
-      uri,
-      query: query,
-      headers: { 'Authorization': "Bearer #{bearer_token}" }
-    )
-    if response.success?
-      nodes = response['value']
-      nodes.select do |node|
-        r_group = node['id'].split('/')[4].downcase
-        if self.resource_groups.include?(r_group)
-          today_compute_nodes.any? do |cn|
-            node['id'].match(/virtualMachines\/(.*)\/providers/i)[1] == cn['name']
+    attempt = 0
+    begin
+      attempt += 1 
+      response = HTTParty.get(
+        uri,
+        query: query,
+        headers: { 'Authorization': "Bearer #{bearer_token}" },
+        timeout: DEFAULT_TIMEOUT
+      )
+      if response.success?
+        nodes = response['value']
+        nodes.select do |node|
+          r_group = node['id'].split('/')[4].downcase
+          if self.resource_groups.include?(r_group)
+            today_compute_nodes.any? do |cn|
+              node['id'].match(/virtualMachines\/(.*)\/providers/i)[1] == cn['name']
+            end
           end
         end
+      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+        raise Net::ReadTimeout
+      else
+        raise AzureApiError.new("Error querying node status Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
       end
-    else
-      raise AzureApiError.new("Error querying node status Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
+    rescue Net::ReadTimeout
+      if attempt < MAX_API_ATTEMPTS
+        retry
+      else
+        raise AzureApiError.new("Timeout error querying node status Azure API for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+      end
     end
   end
 
   def update_bearer_token
-    response = HTTParty.post(
-      "https://login.microsoftonline.com/#{tenant_id}/oauth2/token",
-      body: URI.encode_www_form(
-        client_id: azure_client_id,
-        client_secret: client_secret,
-        resource: 'https://management.azure.com',
-        grant_type: 'client_credentials',
-      ),
-      headers: {
-        'Accept' => 'application/json'
-      }
-    )
+    attempt = 0
+    begin
+      attempt += 1
+      response = HTTParty.post(
+        "https://login.microsoftonline.com/#{tenant_id}/oauth2/token",
+        body: URI.encode_www_form(
+          client_id: azure_client_id,
+          client_secret: client_secret,
+          resource: 'https://management.azure.com',
+          grant_type: 'client_credentials',
+        ),
+        headers: {
+          'Accept' => 'application/json'
+        },
+        timeout: DEFAULT_TIMEOUT
+      )
 
-    if response.success?
-      body = JSON.parse(response.body)
-      @metadata['bearer_token'] = body['access_token']
-      @metadata['bearer_expiry'] = body['expires_on']
-      self.metadata = @metadata.to_json
-      self.save
-    else
-      raise AzureApiError.new("Error obtaining new authorization token for project #{name}.\nError code #{response.code}\n#{response if @verbose}")
+      if response.success?
+        body = JSON.parse(response.body)
+        @metadata['bearer_token'] = body['access_token']
+        @metadata['bearer_expiry'] = body['expires_on']
+        self.metadata = @metadata.to_json
+        self.save
+      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+        raise Net::ReadTimeout
+      else
+        raise AzureApiError.new("Error obtaining new authorization token for project #{name}.\nError code #{response.code}\n#{response if @verbose}")
+      end
+    rescue Net::ReadTimeout
+      if attempt < MAX_API_ATTEMPTS
+        retry
+      else
+        raise AzureApiError.new("Timeout error obtaining new authorization token for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+      end
     end
   end
 
@@ -550,26 +604,39 @@ class AzureProject < Project
       false
     end
     if timestamp == false || Date.today - timestamp >= 1 || existing_regions == false || existing_regions != regions.to_s
-      update_bearer_token
+      refresh_auth_token
       uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
-      response = HTTParty.get(
-        uri,
-        headers: { 'Authorization': "Bearer #{bearer_token}" }
-      )
+      attempt = 0
+      begin
+        attempt += 1
+        response = HTTParty.get(
+          uri,
+          headers: { 'Authorization': "Bearer #{bearer_token}" },
+          timeout: DEFAULT_TIMEOUT
+        )
 
-      if response.success?
-        File.write('azure_prices.txt', "#{Time.now}\n")
-        File.write('azure_prices.txt', "#{regions}\n", mode: "a")
-        response['Meters'].each do |meter|
-          if regions.include?(meter['MeterRegion']) && meter['MeterCategory'] == "Virtual Machines" &&
-            !meter['MeterName'].downcase.include?('low priority') &&
-            !meter["MeterSubCategory"].downcase.include?("windows")
-            File.write("azure_prices.txt", meter.to_json, mode: "a")
-            File.write("azure_prices.txt", "\n", mode: "a")
+        if response.success?
+          File.write('azure_prices.txt', "#{Time.now}\n")
+          File.write('azure_prices.txt', "#{regions}\n", mode: "a")
+          response['Meters'].each do |meter|
+            if regions.include?(meter['MeterRegion']) && meter['MeterCategory'] == "Virtual Machines" &&
+              !meter['MeterName'].downcase.include?('low priority') &&
+              !meter["MeterSubCategory"].downcase.include?("windows")
+              File.write("azure_prices.txt", meter.to_json, mode: "a")
+              File.write("azure_prices.txt", "\n", mode: "a")
+            end
           end
+        elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+          raise Net::ReadTimeout
+        else
+          raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n#{response if @verbose}")
         end
-      else
-        raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n#{response if @verbose}")
+      rescue Net::ReadTimeout
+        if attempt < MAX_API_ATTEMPTS
+          retry
+        else
+          raise AzureApiError.new("Timeout error obtaining latest Azure price list. All #{MAX_API_ATTEMPTS} attempts timed out.")
+        end
       end
     end
   end
@@ -589,40 +656,53 @@ class AzureProject < Project
     end
 
     if timestamp == false || Date.today - timestamp >= 1 || existing_regions == false || existing_regions != regions.to_s
-      update_bearer_token
+      refresh_auth_token
       uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/skus?api-version=2019-04-01"
-      response = HTTParty.get(
-        uri,
-        headers: { 'Authorization': "Bearer #{bearer_token}" }
-      )
+      attempt = 0
+      begin
+        attempt += 1
+        response = HTTParty.get(
+          uri,
+          headers: { 'Authorization': "Bearer #{bearer_token}" },
+          timeout: DEFAULT_TIMEOUT
+        )
       
-      if response.success?
-        File.write('azure_instance_sizes.txt', "#{Time.now}\n")
-        File.write('azure_instance_sizes.txt', "#{regions}\n", mode: "a")
-        response["value"].each do |instance|
-          if instance["resourceType"] == "virtualMachines" && regions.include?(instance["locations"][0]) &&
-            instance["name"].include?("Standard")
-            details = {
-              instance_type: instance["name"], instance_family: instance["family"],
-              location: instance["locations"][0],
-              cpu: 0, gpu: 0, mem: 0
-            }
+        if response.success?
+          File.write('azure_instance_sizes.txt', "#{Time.now}\n")
+          File.write('azure_instance_sizes.txt', "#{regions}\n", mode: "a")
+          response["value"].each do |instance|
+            if instance["resourceType"] == "virtualMachines" && regions.include?(instance["locations"][0]) &&
+              instance["name"].include?("Standard")
+              details = {
+                instance_type: instance["name"], instance_family: instance["family"],
+                location: instance["locations"][0],
+                cpu: 0, gpu: 0, mem: 0
+              }
 
-            instance["capabilities"].each do |capability|
-              if capability["name"] == "MemoryGB"
-                details[:mem] = capability["value"].to_f
-              elsif capability["name"] == "vCPUs"
-                details[:cpu] = capability["value"].to_i
-              elsif capability["name"] == "GPUs"
-                details[:gpu] = capability["value"].to_i
+              instance["capabilities"].each do |capability|
+                if capability["name"] == "MemoryGB"
+                  details[:mem] = capability["value"].to_f
+                elsif capability["name"] == "vCPUs"
+                  details[:cpu] = capability["value"].to_i
+                elsif capability["name"] == "GPUs"
+                  details[:gpu] = capability["value"].to_i
+                end
               end
+              File.write("azure_instance_sizes.txt", details.to_json, mode: "a")
+              File.write("azure_instance_sizes.txt", "\n", mode: "a")
             end
-            File.write("azure_instance_sizes.txt", details.to_json, mode: "a")
-            File.write("azure_instance_sizes.txt", "\n", mode: "a")
           end
+        elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+          raise Net::ReadTimeout
+        else
+          raise AzureApiError.new("Error obtaining latest Azure instance list. Error code #{response.code}.\n#{response if @verbose}")
         end
-      else
-        raise AzureApiError.new("Error obtaining latest Azure instance list. Error code #{response.code}.\n#{response if @verbose}")
+      rescue Net::ReadTimeout
+        if attempt < MAX_API_ATTEMPTS
+          retry
+        else
+          raise AzureApiError.new("Timeout error obtaining latest Azure instance list. All #{MAX_API_ATTEMPTS} attempts timed out.")
+        end
       end
     end
   end
