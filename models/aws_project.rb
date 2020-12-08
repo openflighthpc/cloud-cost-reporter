@@ -199,9 +199,24 @@ class AwsProject < Project
       total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
       total_costs = (total_costs * CostLog::USD_GBP_CONVERSION * 10 * 1.25).ceil
 
-      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)
+      latest_logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)
+      instances_date = latest_logs.first ? Time.parse(latest_logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
+      time_lag = (instances_date.to_date - date).to_i
+
+      inbetween_costs = 0.0
+      inbetween_dates = ((date + 1.day)...instances_date.to_date).to_a
+      inbetween_dates.each do |date|
+        self.instance_logs.where('timestamp LIKE ?', "%#{date}%").where(compute: 1).each do |log|
+          if log.status.downcase == "running"
+            inbetween_costs += @@prices[log.region][log.instance_type]
+          end
+        end
+      end
+      inbetween_costs = (inbetween_costs * CostLog::USD_GBP_CONVERSION * 24 * 10 * 1.25).ceil
+      inbetween_costs = (inbetween_costs + (fixed_daily_cu_cost * inbetween_dates.count)).ceil
+
       future_costs = 0.0
-      logs.each do |log|
+      latest_logs.each do |log|
         if log.status.downcase == "running"
           future_costs += @@prices[log.region][log.instance_type]
         end
@@ -209,10 +224,8 @@ class AwsProject < Project
       daily_future_cu = (future_costs * CostLog::USD_GBP_CONVERSION * 24 * 10 * 1.25).ceil
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
-      remaining_budget = self.current_budget.to_i - total_costs
+      remaining_budget = self.current_budget.to_i - total_costs - inbetween_costs
       remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
-      time_lag = (instances_date.to_date - date).to_i
       enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
       date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
@@ -230,7 +243,8 @@ class AwsProject < Project
       "`#{usage}`\n",
       "The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.",
       "Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day.\n",
-      "The total estimated requirement is therefore *#{total_future_cu}* compute units per day.\n",
+      "The total estimated requirement is therefore *#{total_future_cu}* compute units per day, from today.\n",
+      "Estimated total combined costs for the past #{inbetween_dates.count} days are *#{inbetween_costs}* compute units, based on instances running on those days.\n",
       "*Predicted Usage*"
       ]
 
@@ -242,7 +256,7 @@ class AwsProject < Project
       end
       if remaining_budget < 0 || !enough
         excess = remaining_budget - (total_future_cu * (date.end_of_month.day - date.day))
-        msg << "Based on current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
+        msg << "Based on current usage the budget will be exceeded by *#{excess.abs}* compute units at the end of the month."
       end
 
       msg = msg.join("\n") + "\n"
