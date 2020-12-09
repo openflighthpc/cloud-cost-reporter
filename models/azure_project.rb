@@ -239,8 +239,8 @@ class AzureProject < Project
       compute_costs ||= 0.0
       compute_costs = (compute_costs * 10 * 1.25).ceil
 
-      logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)
-      instances_date = logs.first ? Time.parse(logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
+      latest_logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)
+      instances_date = latest_logs.first ? Time.parse(latest_logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
       update_prices
 
       inbetween_costs = 0.0
@@ -257,7 +257,7 @@ class AzureProject < Project
       inbetween_costs = (inbetween_costs + (fixed_daily_cu_cost * inbetween_dates.count)).ceil
 
       future_costs = 0.0
-      logs.each do |log|
+      latest_logs.each do |log|
         if log.status.downcase == 'available'
           type = log.instance_type.gsub("Standard_", "").gsub("_", " ")
           future_costs += @@prices[@@region_mappings[log.region]][type][0]

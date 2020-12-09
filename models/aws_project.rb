@@ -224,7 +224,7 @@ class AwsProject < Project
       daily_future_cu = (future_costs * CostLog::USD_GBP_CONVERSION * 24 * 10 * 1.25).ceil
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
-      remaining_budget = self.current_budget.to_i - total_costs - inbetween_costs
+      remaining_budget = self.current_budget.to_i - total_costs
       remaining_days = (remaining_budget - inbetween_costs) / (daily_future_cu + fixed_daily_cu_cost)
       enough = (date + remaining_days) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
