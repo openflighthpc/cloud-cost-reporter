@@ -225,8 +225,8 @@ class AwsProject < Project
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
       remaining_budget = self.current_budget.to_i - total_costs - inbetween_costs
-      remaining_days = remaining_budget / (daily_future_cu + fixed_daily_cu_cost)
-      enough = (date + remaining_days + time_lag) >= (date >> 1).beginning_of_month
+      remaining_days = (remaining_budget - inbetween_costs) / (daily_future_cu + fixed_daily_cu_cost)
+      enough = (date + remaining_days) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
       date_warning = date > Date.today - 2 ? "\nWarning: AWS data takes roughly 48 hours to update, so these figures may be inaccurate\n" : nil
 
@@ -244,21 +244,23 @@ class AwsProject < Project
       "The average cost for these compute nodes, in the above state, is about *#{daily_future_cu}* compute units per day.",
       "Other, fixed cluster costs are on average *#{fixed_daily_cu_cost}* compute units per day.\n",
       "The total estimated requirement is therefore *#{total_future_cu}* compute units per day, from today.\n",
-      "Estimated total combined costs for the past #{inbetween_dates.count} days are *#{inbetween_costs}* compute units, based on instances running on those days.\n",
       "*Predicted Usage*"
       ]
 
       if remaining_budget < 0
         msg << ":awooga:The monthly budget *has been exceeded*:awooga:."
-      else
-        msg << "Based on the current usage, the remaining budget will be used up in *#{remaining_days}* days."
-        msg << "#{time_lag > 0 ? "As tracking is *#{time_lag}* days behind, t" : "T"}he budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
+      end
+      if time_lag > 0
+        msg << "Estimated total combined costs for the previous #{inbetween_dates.count} days are *#{inbetween_costs}* compute units, based on instances running on those days.\n"
+      end
+      if remaining_budget > 0
+        msg << "Based on #{'this and ' if time_lag > 0 }the current usage, the remaining budget will be used up in *#{remaining_days}* days."
+        msg << "The budget is predicted to therefore be *#{enough ? "sufficient" : ":awooga:insufficient:awooga:"}* for the rest of the month."
       end
       if remaining_budget < 0 || !enough
         excess = remaining_budget - (total_future_cu * (date.end_of_month.day - date.day))
-        msg << "Based on current usage the budget will be exceeded by *#{excess.abs}* compute units at the end of the month."
+        msg << "Based on #{'this and ' if time_lag > 0 && remaining_budget < 0}the current usage the budget will be exceeded by *#{excess}* compute units at the end of the month."
       end
-
       msg = msg.join("\n") + "\n"
 
       if report && rerun
