@@ -176,10 +176,12 @@ def update_regions(project)
             else
               continue = true
             end
+          else
+            continue = true
           end
         end
         regions << region
-        metadata[:regions] = regions.uniq
+        metadata[:regions] = regions.uniq.reject { |region| region.strip.empty? }
         project.metadata = metadata.to_json
         project.save!
         puts "Region added"
@@ -188,7 +190,9 @@ def update_regions(project)
           valid = true
           present = false
           while !present
-            to_delete = get_non_blank("Region to delete", "Region")
+            # we want to allow blanks here so can delete if one (somehow) previously added
+            print "Region to delete: "
+            to_delete = gets.chomp
             present = regions.include?(to_delete)
             if present
               regions.delete(to_delete)
@@ -247,7 +251,9 @@ def update_resource_groups(project)
           valid = true
           present = false
           while !present
-            to_delete = get_non_blank("Resource group to delete", "Resource group").downcase
+            # we want to allow blanks here so can delete if one (somehow) previously added
+            print "Resource group to delete: "
+            to_delete = gets.chomp.downcase
             present = resource_groups.include?(to_delete)
             if present
               resource_groups.delete(to_delete)
