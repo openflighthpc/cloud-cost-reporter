@@ -1,5 +1,2 @@
 /db/*.sqlite3
 db/test_data.rb
-azure_prices.txt
-azure_instance_sizes.txt
-aws_instance_details.txt
