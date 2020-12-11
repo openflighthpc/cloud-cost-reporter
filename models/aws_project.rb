@@ -512,7 +512,7 @@ class AwsProject < Project
   end
 
   def get_aws_instance_info
-    regions = InstanceLog.where(host: "AWS").select(:region).distinct.pluck(:region).sort
+    regions = AwsProject.where(host: "aws").map { |project| project.regions }.flatten.uniq.sort
 
     timestamp = begin
       Date.parse(File.open('aws_instance_details.txt').first) 
