@@ -151,7 +151,7 @@ class AwsProject < Project
       "*Data Out Costs (USD):* #{data_out_cost_log.cost.to_f.ceil(2)}",
       ("*Compute Units (Flat):* #{data_out_cost_log.compute_cost}" if !short),
       ("*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n" if !short),
-      "*Total Costs(USD):* #{total_cost_log.cost.to_f.ceil(2)}",
+      "*Total Costs (USD):* #{total_cost_log.cost.to_f.ceil(2)}",
       "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
       "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}",
       "#{"\n" if !short}*FC Credits:* #{total_cost_log.fc_credits_cost}",
