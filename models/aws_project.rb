@@ -143,7 +143,7 @@ class AwsProject < Project
     
     cached = !rerun && self.cost_logs.find_by(date: date.to_s, scope: "total")
 
-    compute_cost_log = get_compute_costs(date, rerun)
+    compute_cost_log = get_compute_costs(date, date + 1.day, rerun)
     data_out_cost_log, data_out_amount_log = get_data_out_figures(date, rerun)
     total_cost_log = get_total_costs(date, rerun)
     overall_usage = get_overall_usage(date, customer_facing)
@@ -304,28 +304,37 @@ class AwsProject < Project
     end
   end
 
-  def get_compute_costs(date, rerun)
-    compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
+  def get_compute_costs(start_date, end_date, rerun)
+    compute_cost_log = nil
+    if end_date == start_date + 1.day
+      compute_cost_log = self.cost_logs.find_by(date: start_date.to_s, scope: "compute")
+    end
 
     # only make query if don't already have data in logs or asked to recalculate
     if !compute_cost_log || rerun
       begin
-        compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
+        response = @explorer.get_cost_and_usage(compute_cost_query(start_date, end_date)).results_by_time
       rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
         raise AwsSdkError.new("Unable to determine compute costs for project #{self.name}. #{error if @verbose}") 
       end
-      if rerun && compute_cost_log
-        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
-        compute_cost_log.save!
-      else
-        compute_cost_log = CostLog.create(
-          project_id: self.id,
-          cost: compute_cost,
-          currency: "USD",
-          date: date.to_s,
-          scope: "compute",
-          timestamp: Time.now.to_s
-        )
+
+      response.each do |day|
+        date = day[:time_period][:start]
+        compute_cost = day[:total]["UnblendedCost"][:amount].to_f
+        compute_cost_log = self.cost_logs.find_by(date: date, scope: "compute")
+        if rerun && compute_cost_log
+          compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
+          compute_cost_log.save!
+        else
+          CostLog.create(
+            project_id: self.id,
+            cost: compute_cost,
+            currency: "USD",
+            date: date,
+            scope: "compute",
+            timestamp: Time.now.to_s
+          )
+        end
       end
     end
     compute_cost_log
@@ -543,24 +552,7 @@ class AwsProject < Project
   def record_cost_data_for_range(start_date, end_date, rerun=false)
     # AWS SDK does not include end date, so much increment by one day
     end_date = end_date + 1.day
-    @explorer.get_cost_and_usage(compute_cost_query(start_date, end_date)).results_by_time.each do |day|
-      date = day[:time_period][:start]
-      compute_cost = day[:total]["UnblendedCost"][:amount].to_f
-      compute_cost_log = self.cost_logs.find_by(date: date, scope: "compute")
-      if rerun && compute_cost_log
-        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
-        compute_cost_log.save!
-      else
-        CostLog.create(
-          project_id: self.id,
-          cost: compute_cost,
-          currency: "USD",
-          date: date,
-          scope: "compute",
-          timestamp: Time.now.to_s
-        )
-      end
-    end
+    get_compute_costs(start_date, end_date, rerun)
 
     # data_out_costs = @explorer.get_cost_and_usage(data_out_query(date, end_date))
     # total_costs = @explorer.get_cost_and_usage(all_costs_query(date, end_date))
