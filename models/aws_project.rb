@@ -70,7 +70,6 @@ class AwsProject < Project
     @metadata = JSON.parse(self.metadata)
     Aws.config.update({region: "us-east-1"})
     @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
-    @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: self.regions.first)
     @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
     determine_region_mappings 
   end
@@ -88,23 +87,33 @@ class AwsProject < Project
   def validate_credentials
     puts "Validating AWS project credentials."
     valid = true
+ 
+    begin
+      @explorer = Aws::CostExplorer::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
+      @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: self.regions.first)
+      @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
+    rescue Aws::Errors::MissingRegionError => error
+      puts "Unable to create AWS SDK objects due to missing region: #{error}"
+      return
+    end
+
     begin
       @explorer.get_cost_and_usage(compute_cost_query(DEFAULT_DATE))
-    rescue  Aws::CostExplorer::Errors::ServiceError => error
+    rescue  Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
       valid = false
       puts "Unable to connect to AWS Cost Explorer: #{error}"
     end
     
     begin
       @instances_checker.describe_instances(project_instances_query)
-    rescue Aws::EC2::Errors::ServiceError => error
+    rescue Aws::EC2::Errors::ServiceError, Aws::Errors::MissingRegionError, Seahorse::Client::NetworkingError => error
       valid = false
       puts "Unable to connect to AWS EC2: #{error}."
     end
 
     begin
       @pricing_checker.get_products(service_code: "AmazonEC2", format_version: "aws_v1", max_results: 1)
-    rescue Aws::Pricing::Errors::ServiceError => error
+    rescue Aws::Pricing::Errors::ServiceError, Seahorse::Client::NetworkingError => error
       valid = false
       puts "Unable to connect to AWS Pricing: #{error}"
     end
@@ -300,7 +309,7 @@ class AwsProject < Project
     if !compute_cost_log || rerun
       begin
         compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
-      rescue Aws::CostExplorer::Errors::ServiceError => error
+      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
         raise AwsSdkError.new("Unable to determine compute costs for project #{self.name}. #{error if @verbose}") 
       end
       if rerun && compute_cost_log
@@ -328,7 +337,7 @@ class AwsProject < Project
     if !data_out_cost_log || !data_out_amount_log || rerun
       begin
         data_out_figures = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0]
-      rescue Aws::CostExplorer::Errors::ServiceError => error
+      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
         raise AwsSdkError.new("Unable to determine data out figures for project #{self.name}. #{error if @verbose}") 
       end
       data_out_cost = data_out_figures.total["UnblendedCost"][:amount]
@@ -373,7 +382,7 @@ class AwsProject < Project
     if !total_cost_log || rerun
       begin
         daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
-      rescue Aws::CostExplorer::Errors::ServiceError => error
+      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
         raise AwsSdkError.new("Unable to determine total costs for project #{self.name}. #{error if @verbose}") 
       end
       if total_cost_log && rerun
@@ -396,7 +405,7 @@ class AwsProject < Project
   def get_cost_per_hour(resource_name, region)
     begin
       result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
-    rescue Aws::Pricing::Errors::ServiceError => error
+    rescue Aws::Pricing::Errors::ServiceError, Seahorse::Client::NetworkingError => error
       raise AwsSdkError.new("Unable to get prices for instance type #{resource_name} in region #{region}. #{error if @verbose}") 
     end
     details = JSON.parse(result.first)["terms"]["OnDemand"]
@@ -440,7 +449,7 @@ class AwsProject < Project
     if !logs.any?
       begin
         usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
-      rescue Aws::CostExplorer::Errors::ServiceError => error
+      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
         raise AwsSdkError.new("Unable to determine hours by instance type for project #{self.name}. #{error if @verbose}") 
       end
       usage_by_instance_type.results_by_time[0].groups.each do |group|
@@ -486,12 +495,14 @@ class AwsProject < Project
     today_logs.delete_all if rerun
     if today_logs.count == 0
       regions.reverse.each do |region|
-        @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: region)
-        results = nil
         begin
+          @instances_checker = Aws::EC2::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key, region: region)
+          results = nil
           results = @instances_checker.describe_instances(project_instances_query)
-        rescue Aws::EC2::Errors::ServiceError => error
+        rescue Aws::EC2::Errors::ServiceError, Seahorse::Client::NetworkingError => error
           raise AwsSdkError.new("Unable to determine AWS instances for project #{self.name} in region #{region}. #{error if @verbose}")
+        rescue Aws::Errors::MissingRegionError => error
+          raise AwsSdkError.new("Unable to determine AWS instances for project #{self.name} due to missing region. #{error if @verbose}")  
         end
         @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
           reservation.instances.each do |instance|
@@ -552,7 +563,7 @@ class AwsProject < Project
         while first_query || results&.next_token
           begin
             results = @pricing_checker.get_products(instances_info_query(region, results&.next_token))
-          rescue Aws::Pricing::Errors::ServiceError => error
+          rescue Aws::Pricing::Errors::ServiceError, Aws::Errors::MissingRegionError, Seahorse::Client::NetworkingError => error
             raise AwsSdkError.new("Unable to determine AWS instances in region #{region}. #{error}")
           end
           results.price_list.each do |result|

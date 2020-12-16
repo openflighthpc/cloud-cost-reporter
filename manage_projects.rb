@@ -97,15 +97,12 @@ def update_attributes(project)
       keys = metadata.keys
       keys = keys - ["regions", "resource_groups", "bearer_token", "bearer_expiry"]
       puts "Possible keys: #{keys.join(", ")}"
-      print "Key name: "
-      key = gets.chomp
-      print 'Value: '
-      value = gets.chomp
+      key = get_non_blank("Key name", "Key")
+      value = get_non_blank("#{key} value", key)
       metadata[key] = value
       project.metadata = metadata.to_json
     else
-      print 'Value: '
-      value = gets.chomp
+      value = get_non_blank(attribute)
       project.write_attribute(attribute.to_sym, value)
     end
     valid = project.valid?
@@ -113,7 +110,7 @@ def update_attributes(project)
       project.errors.messages.each do |k, v|
         puts "#{k} #{v.join("; ")}"
         puts "Please enter new #{k}"
-        value = gets.chomp
+        value = get_non_blank(k)
         project.write_attribute(k, value)
       end
       valid = project.valid?
@@ -149,9 +146,6 @@ def update_attributes(project)
 end
 
 def update_regions(project)
-  metadata = JSON.parse(project.metadata)
-  regions = project.regions
-  puts "Regions: #{regions.join(", ")}"
   aws_regions = []
   file = File.open('aws_region_names.txt')
   file.readlines.each do |line|
@@ -161,13 +155,15 @@ def update_regions(project)
   stop = false
   valid = false
   while !stop
+    metadata = JSON.parse(project.metadata)
+    regions = project.regions
+    puts "Regions: #{regions.join(", ")}"
     while !valid
       puts "Add or delete region (add/delete)? "
       response = gets.chomp.downcase
       if response == "add"
         valid = true
-        print "Add region (e.g. eu-central-1): "
-        region = gets.chomp.downcase
+        region = get_non_blank("Add region (e.g. eu-central-1)", "Region")
         continue = false
         while !continue
           if !aws_regions.include?(region)
@@ -180,6 +176,8 @@ def update_regions(project)
             else
               continue = true
             end
+          else
+            continue = true
           end
         end
         regions << region
@@ -192,6 +190,7 @@ def update_regions(project)
           valid = true
           present = false
           while !present
+            # we want to allow blanks here so can delete if one (somehow) previously added
             print "Region to delete: "
             to_delete = gets.chomp
             present = regions.include?(to_delete)
@@ -222,7 +221,6 @@ def update_regions(project)
       elsif action != "y"
         puts "Invalid option. Please try again"
       else
-        puts "Regions: #{regions.join(", ")}"
         stop = false
         yes_or_no = true
         valid = false
@@ -232,21 +230,18 @@ def update_regions(project)
 end
 
 def update_resource_groups(project)
-  metadata = JSON.parse(project.metadata)
-  resource_groups = project.resource_groups
-  puts "Resource groups: #{resource_groups.join(", ")}"
   stop = false
   valid = false
   while !stop
+    metadata = JSON.parse(project.metadata)
+    resource_groups = project.resource_groups
+    puts "Resource groups: #{resource_groups.join(", ")}"
     while !valid
       puts "Add or delete resource group (add/delete)? "
       response = gets.chomp.downcase
       if response == "add"
         valid = true
-        print "Add resource group: "
-        group = gets.chomp.downcase
-        continue = false
-        resource_groups << group
+        resource_groups << get_non_blank("Add resource group", "Resource group").downcase
         metadata[:resource_groups] = resource_groups.uniq
         project.metadata = metadata.to_json
         project.save!
@@ -256,6 +251,7 @@ def update_resource_groups(project)
           valid = true
           present = false
           while !present
+            # we want to allow blanks here so can delete if one (somehow) previously added
             print "Resource group to delete: "
             to_delete = gets.chomp.downcase
             present = resource_groups.include?(to_delete)
@@ -286,7 +282,6 @@ def update_resource_groups(project)
       elsif action != "y"
         puts "Invalid option. Please try again"
       else
-        puts "Resource groups: #{resource_groups.join(", ")}"
         stop = false
         yes_or_no = true
         valid = false
@@ -324,7 +319,7 @@ def add_project
   while !valid_date
     print "End date (YYYY-MM-DD). Press enter to leave blank: "
     date = gets.chomp
-    break if date == ""
+    break if date.empty?
     valid_date = begin
       Date.parse(date)
     rescue ArgumentError
@@ -337,16 +332,23 @@ def add_project
     end
   end
   
-  print "Budget (c.u./month): "
-  budget = gets.chomp
-  print "Slack Channel: "
-  attributes[:slack_channel] = gets.chomp
+  budget = nil
+  valid = false
+  while !valid
+    budget = get_non_blank("Budget amount (c.u./month)", "Budget")
+    valid = begin
+      Integer(budget, 10)
+    rescue ArgumentError, TypeError
+      false
+    end
+    puts "Please enter a number" if !valid
+  end
+  attributes[:slack_channel] = get_non_blank("Slack Channel", "Slack Channel")
 
   metadata = {}
   if attributes[:host].downcase == "aws"
     regions = []
-    print "Primary region (e.g. eu-west-2): "
-    regions << gets.chomp
+    regions << get_non_blank("Add region (e.g. eu-west-2)", "Region").downcase
     stop = false
     while !stop
       valid = false
@@ -363,17 +365,13 @@ def add_project
         end
       end
       if !stop
-        print "Additional region (e.g. eu-central-1): "
-        regions << gets.chomp
+        regions << get_non_blank("Additional region (e.g. eu-central-1)", "Region")
       end
     end
     metadata["regions"] = regions
-    print "Access Key Id: "
-    metadata["access_key_ident"] = gets.chomp
-    print "Secret Access Key: "
-    metadata["key"] = gets.chomp
-    print "Account Id number: "
-    metadata["account_id"] = gets.chomp
+    metadata["access_key_ident"] = get_non_blank("Access Key Id")
+    metadata["key"] = get_non_blank("Secret Access Key")
+    metadata["account_id"] = get_non_blank("Account Id Number")
     valid = false
     while !valid
       print "Filtering level (tag/account): "
@@ -386,17 +384,12 @@ def add_project
       end
     end
   else
-    print "Tenant Id: "
-    metadata["tenant_id"] = gets.chomp
-    print "Azure Client Id: "
-    metadata["client_id"] = gets.chomp
-    print "Subscription Id: "
-    metadata["subscription_id"] = gets.chomp
-    print "Client Secret: "
-    metadata["client_secret"] = gets.chomp
+    metadata["tenant_id"] = get_non_blank("Tenant Id")
+    metadata["client_id"] = get_non_blank("Azure Client Id")
+    metadata["subscription_id"] = get_non_blank("Subscription Id")
+    metadata["client_secret"] = get_non_blank("Client Secret")
     resource_groups = []
-    print "First resource group name: "
-    resource_groups << gets.chomp.downcase
+    resource_groups << get_non_blank("First resource group name", "Resource group").downcase
     stop = false
     while !stop
       valid = false
@@ -413,8 +406,7 @@ def add_project
         end
       end
       if !stop
-        print "Additional resource group name: "
-        resource_groups << gets.chomp.downcase
+        resource_groups << get_non_blank("Additional resource group name", "Resource group").downcase
       end
     end
     metadata["resource_groups"] = resource_groups
@@ -427,7 +419,7 @@ def add_project
     project.errors.messages.each do |k, v|
       puts "#{k} #{v.join("; ")}"
       puts "Please enter new #{k}"
-      value = gets.chomp
+      value = get_non_blank(k)
       project.write_attribute(k, value)
     end
     valid = project.valid?
@@ -468,8 +460,7 @@ end
 def add_budget(project)
   valid = false
   while !valid
-    print "Budget amount (c.u./month): "
-    amount = gets.chomp
+    amount = get_non_blank("Budget amount (c.u./month)", "Budget")
     valid = begin
       Integer(amount, 10)
     rescue ArgumentError, TypeError
@@ -491,6 +482,20 @@ def add_budget(project)
   budget = Budget.new(project_id: project.id, amount: amount, effective_at: valid_date, timestamp: Time.now)
   budget.save!
   puts "Budget created"
+end
+
+def get_non_blank(text, attribute=text)
+  valid = false
+  while !valid
+    print "#{text}: "
+    response = gets.strip
+    if response.empty?
+      puts "#{attribute} must not be blank"
+    else
+      valid = true
+    end
+  end
+  response
 end
 
 # for table print
