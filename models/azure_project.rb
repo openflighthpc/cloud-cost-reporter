@@ -121,7 +121,7 @@ class AzureProject < Project
     valid
   end
 
-  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)
+  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false, short=false)
     @verbose = verbose
     refresh_auth_token
     record_instance_logs(rerun) if date == DEFAULT_DATE
@@ -168,18 +168,18 @@ class AzureProject < Project
         "#{"*Cached report*" if cached}",
         ":moneybag: Usage for #{date.to_s} :moneybag:",
         "*Compute Cost (GBP):* #{compute_cost_log.cost.to_f.ceil(2)}",
-        "*Compute Units (Flat):* #{compute_cost_log.compute_cost}",
-        "*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n",
-        "*Data Out (GB):* #{data_out_amount_log.amount.to_f.ceil(4)}",
+        ("*Compute Units (Flat):* #{compute_cost_log.compute_cost}" if !short),
+        ("*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n" if !short),
+        ("*Data Out (GB):* #{data_out_amount_log.amount.to_f.ceil(4)}" if !short),
         "*Data Out Costs (GBP):* #{data_out_cost_log.cost.to_f.ceil(2)}",
-        "*Compute Units (Flat):* #{data_out_cost_log.compute_cost}",
-        "*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n",
+        ("*Compute Units (Flat):* #{data_out_cost_log.compute_cost}" if !short),
+        ("*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n" if !short),
         "*Total Cost (GBP):* #{total_cost_log.cost.to_f.ceil(2)}",
         "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
-        "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}\n",
-        "*FC Credits:* #{total_cost_log.fc_credits_cost}",
-        "*Compute Instance Usage:* #{overall_usage}"
-      ].join("\n") + "\n"
+        "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}",
+        "#{"\n" if !short}*FC Credits:* #{total_cost_log.fc_credits_cost}",
+        ("*Compute Instance Usage:* #{overall_usage}" if !short)
+      ].compact.join("\n") + "\n"
     send_slack_message(msg) if slack
     
     if text

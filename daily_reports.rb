@@ -30,10 +30,10 @@ require 'date'
 require 'sqlite3'
 require_relative './models/project_factory'
 
-def all_projects(date, slack, text, rerun, verbose, customer_facing)
+def all_projects(date, slack, text, rerun, verbose, customer_facing, short)
   ProjectFactory.new().all_active_projects_as_type.each do |project|
     begin
-      project.daily_report(date, slack, text, rerun, verbose, customer_facing)
+      project.daily_report(date, slack, text, rerun, verbose, customer_facing, short)
     rescue AzureApiError, AwsSdkError => e
       puts "Generation of daily report for project #{project.name} stopped due to error: "
       puts e
@@ -47,6 +47,7 @@ project = nil
 rerun = ARGV.include?("rerun")
 slack = ARGV.include?("slack")
 text = ARGV.include?("text")
+short = ARGV.include?("short")
 customer_facing = ARGV.include?("customer")
 
 if !(slack || text)
@@ -80,11 +81,11 @@ if ARGV[0] && ARGV[0] != "all"
   end
   project = ProjectFactory.new().as_type(project)
   begin
-    project.daily_report(date, slack, text, rerun, verbose, customer_facing)
+    project.daily_report(date, slack, text, rerun, verbose, customer_facing, short)
   rescue AzureApiError, AwsSdkError => e
     puts "Generation of daily report for project #{project.name} stopped due to error: "
     puts e
   end
 else
-  all_projects(date, slack, text, rerun, verbose, customer_facing)
+  all_projects(date, slack, text, rerun, verbose, customer_facing, short)
 end
