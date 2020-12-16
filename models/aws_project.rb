@@ -540,6 +540,32 @@ class AwsProject < Project
     @explorer.get_cost_and_usage(data_out_query(date))
   end
 
+  def record_cost_data_for_range(start_date, end_date, rerun=false)
+    # AWS SDK does not include end date, so much increment by one day
+    end_date = end_date + 1.day
+    @explorer.get_cost_and_usage(compute_cost_query(start_date, end_date)).results_by_time.each do |day|
+      date = day[:time_period][:start]
+      compute_cost = day[:total]["UnblendedCost"][:amount].to_f
+      compute_cost_log = self.cost_logs.find_by(date: date, scope: "compute")
+      if rerun && compute_cost_log
+        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
+        compute_cost_log.save!
+      else
+        CostLog.create(
+          project_id: self.id,
+          cost: compute_cost,
+          currency: "USD",
+          date: date,
+          scope: "compute",
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+
+    # data_out_costs = @explorer.get_cost_and_usage(data_out_query(date, end_date))
+    # total_costs = @explorer.get_cost_and_usage(all_costs_query(date, end_date))
+  end
+
   def get_aws_instance_info
     regions = AwsProject.all.map(&:regions).flatten.uniq | ["eu-west-2"]
     regions.sort!
