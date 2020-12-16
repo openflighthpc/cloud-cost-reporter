@@ -37,6 +37,8 @@ class AzureProject < Project
   after_initialize :construct_metadata
   after_initialize :update_region_mappings
 
+  default_scope { where(host: "azure") }
+
   def tenant_id
     @metadata['tenant_id']
   end

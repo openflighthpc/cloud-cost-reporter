@@ -36,6 +36,8 @@ class AwsProject < Project
   @@region_mappings = {}
   after_initialize :add_sdk_objects
 
+  default_scope { where(host: "aws") }
+
   def access_key_ident
     @metadata['access_key_ident']
   end
@@ -539,7 +541,8 @@ class AwsProject < Project
   end
 
   def get_aws_instance_info
-    regions = InstanceLog.where(host: "AWS").select(:region).distinct.pluck(:region).sort
+    regions = AwsProject.all.map(&:regions).flatten.uniq | ["eu-west-2"]
+    regions.sort!
 
     timestamp = begin
       Date.parse(File.open('aws_instance_details.txt').first) 
