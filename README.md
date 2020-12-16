@@ -171,6 +171,10 @@ For the weekly report, future costs are estimated based on the active compute no
 
 You can also run `ruby get_latest_azure_prices.rb`, which will use an existing Azure project (which provides the required credentials for the API) to run this update to the prices on command. By setting up a cronjob to run this separately from the main files (for example, at the start of each day), wait times for generating Azure weekly reports can be dramatically reduced.
 
+### Recording Azure Instance Details and AWS Instance Details & Pricing
+
+The application also includes initial versions of the files `aws_instance_details.txt` and `azure_instance_sizes.txt`. These are not required for this application, but are used by the associated openflight `cloud-cost-visualiser` project, with the files generated here as they require a valid AWS / Azure project for retrieving the data. These can be updated by runing `ruby get_latest_aws_instance_info` and `ruby get_latest_azure_instance_sizes.rb` respectively.
+
 # Contributing
 
 Fork the project. Make your feature addition or bug fix. Send a pull
