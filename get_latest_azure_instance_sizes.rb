@@ -28,7 +28,7 @@
 require_relative './models/azure_project.rb'
 
 # Need Azure credentials to get instance list, so use a project in database.
-project = AzureProject.where(host: 'azure').first
+project = AzureProject.first
 if !project
   puts "No Azure projects in database to retrieve price list"
 else
