@@ -181,7 +181,7 @@ def update_regions(project)
           end
         end
         regions << region
-        metadata[:regions] = regions.uniq.reject { |region| region.strip.empty? }
+        metadata[:regions] = regions.uniq
         project.metadata = metadata.to_json
         project.save!
         puts "Region added"
@@ -319,7 +319,7 @@ def add_project
   while !valid_date
     print "End date (YYYY-MM-DD). Press enter to leave blank: "
     date = gets.chomp
-    break if date == ""
+    break if date.empty?
     valid_date = begin
       Date.parse(date)
     rescue ArgumentError
@@ -489,7 +489,7 @@ def get_non_blank(text, attribute=text)
   while !valid
     print "#{text}: "
     response = gets.strip
-    if response == ""
+    if response.empty?
       puts "#{attribute} must not be blank"
     else
       valid = true
