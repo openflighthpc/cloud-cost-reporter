@@ -466,10 +466,15 @@ class AzureProject < Project
   end
 
   def record_cost_data_for_range(start_date, end_date, rerun=false)
-    refresh_auth_token
+    update_bearer_token
     (start_date..end_date).to_a.each do |date|
-      response = api_query_cost(date)
-      get_total_costs(response, date, rerun)
+      logs = self.cost_logs.where(date: date)
+      if !logs.any? || rerun
+        response = api_query_cost(date)
+        get_total_costs(response, date, rerun)
+        get_compute_costs(response, date, rerun)
+        get_data_out_figures(response, date, rerun)
+      end
     end
   end
 
