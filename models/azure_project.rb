@@ -137,29 +137,7 @@ class AzureProject < Project
 
     if rerun || !(total_cost_log && data_out_cost_log && data_out_amount_log && compute_cost_log)
       response = api_query_cost(date)
-      # the query has multiple values that sound useful (effectivePrice, cost, 
-      # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
-      # Cost Analysis page (under 'Actual Cost') for the period selected.
-      daily_cost = begin
-                     response.map { |c| c['properties']['cost'] }.reduce(:+)
-                   rescue NoMethodError
-                     0.0
-                   end
-
-      if rerun && total_cost_log
-        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
-        total_cost_log.save!
-      else
-        total_cost_log = CostLog.create(
-          project_id: id,
-          cost: daily_cost,
-          currency: 'GBP',
-          scope: 'total',
-          date: date.to_s,
-          timestamp: Time.now.to_s
-        )
-      end
-
+      total_cost_log = get_total_costs(response, date, rerun)
       data_out_cost_log, data_out_amount_log = get_data_out_figures(response, date, rerun)
       compute_cost_log = get_compute_costs(response, date, rerun)
     end
@@ -380,6 +358,35 @@ class AzureProject < Project
     overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
+  def get_total_costs(cost_entries, date, rerun)
+    total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
+    if !total_cost_log || rerun
+      # the query has multiple values that sound useful (effectivePrice, cost, 
+      # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
+      # Cost Analysis page (under 'Actual Cost') for the period selected.
+      daily_cost = begin
+                    cost_entries.map { |c| c['properties']['cost'] }.reduce(:+)
+                  rescue NoMethodError
+                    0.0
+                  end
+
+      if rerun && total_cost_log
+        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
+        total_cost_log.save!
+      else
+        total_cost_log = CostLog.create(
+          project_id: id,
+          cost: daily_cost,
+          currency: 'GBP',
+          scope: 'total',
+          date: date.to_s,
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    total_cost_log
+  end
+
   def get_compute_costs(cost_entries, date, rerun)
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
@@ -456,6 +463,14 @@ class AzureProject < Project
       end
     end
     return data_out_cost_log, data_out_amount_log
+  end
+
+  def record_cost_data_for_range(start_date, end_date, rerun=false)
+    refresh_auth_token
+    (start_date..end_date).to_a.each do |date|
+      response = api_query_cost(date)
+      get_total_costs(response, date, rerun)
+    end
   end
 
   def api_query_compute_nodes
