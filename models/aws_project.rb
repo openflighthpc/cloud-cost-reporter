@@ -128,7 +128,7 @@ class AwsProject < Project
     valid
   end
 
-  def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false, short=false)
+  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false, short=false)
     @verbose = verbose
     start_date = Date.parse(self.start_date)
     if date < start_date
@@ -470,50 +470,55 @@ class AwsProject < Project
     overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
-  def get_usage_hours_by_instance_type(date=(DEFAULT_DATE), rerun=false, customer_facing=false)
-    logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: date).where(end_date: date + 1)
-    logs.delete_all if rerun
-    usage_breakdown = "\n\t\t\t\t"
-    compute_other = []
-    if !logs.any?
-      begin
-        usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
-      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
-        raise AwsSdkError.new("Unable to determine hours by instance type for project #{self.name}. #{error if @verbose}") 
-      end
-      usage_by_instance_type.results_by_time[0].groups.each do |group|
-        instance_type = group[:keys][0]
-        amount = group[:metrics]["UsageQuantity"][:amount].to_f.round(2)
-        log = UsageLog.create(
-          project_id: self.id,
-          description: instance_type,
-          amount: amount,
-          unit: "hours",
-          scope: "compute",
-          start_date: date,
-          end_date: date + 1,
-          timestamp: Time.now
-        )
-        if customer_facing
-          mapping = InstanceMapping.find_by(instance_type: instance_type)
-          if mapping
-            instance_type = mapping.customer_facing_name
-          else
-            compute_other << log
-          end
+  def get_usage_hours(start_date, end_date, rerun=false)
+    all_logs = []
+    begin
+      usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(start_date, end_date))
+    rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
+      raise AwsSdkError.new("Unable to determine hours by instance type for project #{self.name}. #{error if @verbose}") 
+    end
+    usage_by_instance_type.results_by_time.each do |day|
+      date = Date.parse(day[:time_period][:start])
+      next_day = date + 1.day
+      logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: date.to_s).where(end_date: next_day.to_s)
+      logs.delete_all if rerun
+      if !logs.any?
+        day.groups.each do |group|
+          instance_type = group[:keys][0]
+          amount = group[:metrics]["UsageQuantity"][:amount].to_f.round(2)
+          all_logs << UsageLog.create(
+            project_id: self.id,
+            description: instance_type,
+            amount: amount,
+            unit: "hours",
+            scope: "compute",
+            start_date: date.to_s,
+            end_date: next_day.to_s,
+            timestamp: Time.now
+          )
         end
-        usage_breakdown << "#{instance_type}: #{amount} hours \n\t\t\t\t" if !compute_other.include?(log)
-      end
-    else
-      logs.each do |log|
-        type = customer_facing ? log.customer_facing_type : log.description
-        if type == "Compute (Other)"
-          compute_other << log
-        else
-          usage_breakdown << "#{type}: #{log.amount} hours \n\t\t\t\t"
-        end
+      else
+        all_logs << logs
       end
     end
+    all_logs.flatten
+  end
+
+  def get_usage_hours_by_instance_type(start_date=DEFAULT_DATE, rerun=false, customer_facing=false)
+    logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: start_date).where(end_date: start_date + 1.day)
+    logs = get_usage_hours(start_date, start_date + 1.day, rerun) if !logs || rerun
+    usage_breakdown = "\n\t\t\t\t"
+    compute_other = []
+    
+    logs.each do |log|
+      type = customer_facing ? log.customer_facing_type : log.description
+      if type == "Compute (Other)"
+        compute_other << log
+      else
+        usage_breakdown << "#{type}: #{log.amount} hours \n\t\t\t\t"
+      end
+    end
+
     compute_other_hours = compute_other.reduce(0.0) { |sum, log| sum + log.amount }.ceil(2)
     usage_breakdown << "Compute (Other): #{compute_other_hours} hours \n\t\t\t\t" if compute_other.any?
     usage_breakdown == "\n\t\t\t\t" ? "None" : usage_breakdown
@@ -573,6 +578,7 @@ class AwsProject < Project
     get_compute_costs(start_date, end_date, rerun)
     get_data_out_figures(start_date, end_date, rerun)
     get_total_costs(start_date, end_date, rerun)
+    get_usage_hours(start_date, end_date, rerun)
   end
 
   def get_aws_instance_info
@@ -689,11 +695,11 @@ class AwsProject < Project
     }
   end
 
-  def compute_instance_type_usage_query(date)
+  def compute_instance_type_usage_query(start_date, end_date=start_date + 1.day)
     {
       time_period: {
-        start: date.to_s,
-        end: (date + 1).to_s
+        start: start_date.to_s,
+        end: end_date.to_s
       },
       granularity: "DAILY",
       metrics: ["USAGE_QUANTITY"],
