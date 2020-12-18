@@ -506,7 +506,7 @@ class AwsProject < Project
 
   def get_usage_hours_by_instance_type(start_date=DEFAULT_DATE, rerun=false, customer_facing=false)
     logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: start_date).where(end_date: start_date + 1.day)
-    logs = get_usage_hours(start_date, start_date + 1.day, rerun) if !logs || rerun
+    logs = get_usage_hours(start_date, start_date + 1.day, rerun) if !logs.any? || rerun
     usage_breakdown = "\n\t\t\t\t"
     compute_other = []
     
@@ -572,8 +572,8 @@ class AwsProject < Project
     @explorer.get_cost_and_usage(data_out_query(date))
   end
 
-  def record_cost_data_for_range(start_date, end_date, rerun=false)
-    # AWS SDK does not include end date, so much increment by one day
+  def record_logs_for_range(start_date, end_date, rerun=false)
+    # AWS SDK does not include end date, so must increment by one day
     end_date = end_date + 1.day
     get_compute_costs(start_date, end_date, rerun)
     get_data_out_figures(start_date, end_date, rerun)

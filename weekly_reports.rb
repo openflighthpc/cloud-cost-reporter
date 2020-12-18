@@ -25,9 +25,7 @@
 # https://github.com/openflighthpc/cloud-cost-reporter
 #==============================================================================
 
-require 'json'
 require 'date'
-require 'sqlite3'
 require_relative './models/project_factory'
 
 def all_projects(date, slack, text, rerun, verbose, customer_facing)

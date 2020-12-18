@@ -465,7 +465,7 @@ class AzureProject < Project
     return data_out_cost_log, data_out_amount_log
   end
 
-  def record_cost_data_for_range(start_date, end_date, rerun=false)
+  def record_logs_for_range(start_date, end_date, rerun=false)
     update_bearer_token
     (start_date..end_date).to_a.each do |date|
       logs = self.cost_logs.where(date: date)
