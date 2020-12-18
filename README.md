@@ -187,6 +187,8 @@ Historic gaps can also be filled when adding a project using `manage_projects.rb
 
 For AWS projects this retrieval and recording is a quick process, even with a large date range (300+ days). However, due to limitations in possible queries to Azure APIs and their slow responses, this can take 5+ minutes per 1 month of data for Azure Projects.
 
+Please note that compute costs are only available for dates after compute tags have been added to resources. For Azure projects, historic compute costs will be available only for instances that have previously been identified and recorded as compute instances in instance logs.
+
 # Contributing
 
 Fork the project. Make your feature addition or bug fix. Send a pull
