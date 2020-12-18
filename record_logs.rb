@@ -70,6 +70,8 @@ if end_date > Project::DEFAULT_DATE
   return
 end
 
+puts "Recording logs."
+puts "This may take some time (5+ mins per month of data). " if project.host == "azure"
 begin
   project = ProjectFactory.new().as_type(project)
   project.record_logs_for_range(start_date, end_date, rerun)
@@ -78,3 +80,4 @@ rescue AzureApiError, AwsSdkError => e
   puts e
   return
 end
+puts "Logs recorded."

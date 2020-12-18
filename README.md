@@ -175,6 +175,18 @@ You can also run `ruby get_latest_azure_prices.rb`, which will use an existing A
 
 The application also includes initial versions of the files `aws_instance_details.txt` and `azure_instance_sizes.txt`. These are not required for this application, but are used by the associated openflight `cloud-cost-visualiser` project, with the files generated here as they require a valid AWS / Azure project for retrieving the data. These can be updated by runing `ruby get_latest_aws_instance_info` and `ruby get_latest_azure_instance_sizes.rb` respectively.
 
+### Recording historic cost logs
+
+If a project has significant gaps in its cost and usage logs, for example due to only recently being added to this application, two helpers are provided to fill these gaps without the need for manually running daily reports for each missing day.
+
+Firstly, `record_logs.rb` can be run, with three required arguments and one optional argument. These are, in order: the project name, start date, end date and rerun (optional). This will query the relevant AWS SDKs / Azure APIs and record cost and usage logs for all days in that date range (inclusive). For example `ruby record_logs.rb project1 2020-01-01 2020-09-30` will record logs for the project named project1 for all days between and including 1st January 2020 to 30th September.
+
+If the 4th, optional argument `rerun` is not included, this will ignore any dates which already have logs recorded. If it is included, any existing logs will be overwritten with newly retrieved data.
+
+Historic gaps can also be filled when adding a project using `manage_projects.rb`. Here, if the project has a start date in the past, after the project is created the user is asked if they want to retrieve historic data. Entering `y` will carry out the same process as in `record_logs.rb`, for all dates from the project start date to 3 days ago (the latest date cost data is available).
+
+For AWS projects this retrieval and recording is a quick process, even with a large date range (300+ days). However, due to limitations in possible queries to Azure APIs and their slow responses, this can take 5+ minutes per 1 month of data for Azure Projects.
+
 # Contributing
 
 Fork the project. Make your feature addition or bug fix. Send a pull

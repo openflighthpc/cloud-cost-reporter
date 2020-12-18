@@ -454,6 +454,7 @@ def add_project
         stop = true
         valid = true
       elsif response == "y"
+        "Recording logs"
         valid = true
         project = ProjectFactory.new().as_type(project)
         begin
