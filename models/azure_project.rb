@@ -467,6 +467,7 @@ class AzureProject < Project
 
   def record_logs_for_range(start_date, end_date, rerun=false)
     update_bearer_token
+    record_instance_logs # need some instance logs in order to determine compute costs
     (start_date..end_date).to_a.each do |date|
       logs = self.cost_logs.where(date: date)
       if !logs.any? || rerun
@@ -492,6 +493,8 @@ class AzureProject < Project
         headers: { 'Authorization': "Bearer #{bearer_token}" },
         timeout: DEFAULT_TIMEOUT
       )
+
+      puts response
 
       if response.success?
         vms = response['value']

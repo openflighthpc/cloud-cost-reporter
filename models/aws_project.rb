@@ -96,7 +96,7 @@ class AwsProject < Project
       @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
     rescue Aws::Errors::MissingRegionError => error
       puts "Unable to create AWS SDK objects due to missing region: #{error}"
-      return
+      return false
     end
 
     begin
