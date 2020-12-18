@@ -494,8 +494,6 @@ class AzureProject < Project
         timeout: DEFAULT_TIMEOUT
       )
 
-      puts response
-
       if response.success?
         vms = response['value']
         vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
