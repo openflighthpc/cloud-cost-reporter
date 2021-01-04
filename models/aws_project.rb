@@ -290,15 +290,21 @@ class AwsProject < Project
   end
 
   def get_latest_prices
-    instance_types = self.instance_logs.where(host: "AWS").group(:region, :instance_type).pluck(:instance_type, :region)
-    instance_types.each do |instance_type_details|
-      instance_type = instance_type_details[0]
-      region = instance_type_details[1]
-      if !@@prices.has_key?(region)
-        @@prices[region] = {}
-      end
-      if !@@prices[region].has_key?(instance_type)
-        @@prices[region][instance_type] = get_cost_per_hour(instance_type, region)
+    if @@prices == {}
+      get_aws_instance_info
+      File.foreach('aws_instance_details.txt').with_index do |entry, index|
+        if index > 1
+          entry = JSON.parse(entry)
+          instance_type = entry['instance_type']
+          region = entry['location']
+          if !@@prices.has_key?(region)
+            @@prices[region] = {}
+          end
+
+          if !@@prices[region].has_key?(instance_type)
+            @@prices[region][instance_type] = entry['price_per_hour'].to_f
+          end
+        end
       end
     end
   end
