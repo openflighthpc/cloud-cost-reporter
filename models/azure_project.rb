@@ -168,7 +168,7 @@ class AzureProject < Project
 
     msg = [
         "#{"*Cached report*" if cached}",
-        ":moneybag: Usage for #{date.to_s} :moneybag:",
+        ":moneybag: Usage for *#{self.name}* on #{date.to_s} :moneybag:",
         "*Compute Cost (GBP):* #{compute_cost_log.cost.to_f.ceil(2)}",
         ("*Compute Units (Flat):* #{compute_cost_log.compute_cost}" if !short),
         ("*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n" if !short),
@@ -176,7 +176,7 @@ class AzureProject < Project
         "*Data Out Costs (GBP):* #{data_out_cost_log.cost.to_f.ceil(2)}",
         ("*Compute Units (Flat):* #{data_out_cost_log.compute_cost}" if !short),
         ("*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n" if !short),
-        "*Total Cost (GBP):* #{total_cost_log.cost.to_f.ceil(2)}",
+        "*Total Costs (GBP):* #{total_cost_log.cost.to_f.ceil(2)}",
         "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
         "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}",
         "#{"\n" if !short}*FC Credits:* #{total_cost_log.fc_credits_cost}",
@@ -185,7 +185,6 @@ class AzureProject < Project
     send_slack_message(msg) if slack
     
     if text
-      puts "\nProject: #{self.name}\n"
       puts msg.gsub(":moneybag:", "").gsub("*", "")
       puts "_" * 50
     end
