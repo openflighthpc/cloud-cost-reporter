@@ -154,7 +154,7 @@ class AwsProject < Project
     msg = [
       "#{date_warning if date_warning}",
       "#{"*Cached report*" if cached}",
-      ":moneybag: Usage for #{(date).to_s} :moneybag:",
+      ":moneybag: Usage for *#{self.name}* on #{date.to_s} :moneybag:",
       "*Compute Costs (USD):* #{compute_cost_log.cost.to_f.ceil(2)}",
       ("*Compute Units (Flat):* #{compute_cost_log.compute_cost}" if !short),
       ("*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n" if !short),
@@ -173,7 +173,6 @@ class AwsProject < Project
     send_slack_message(msg) if slack
 
     if text
-      puts "\nProject: #{self.name}"
       puts msg.gsub(":moneybag:", "").gsub("*", "").gsub("\t", "")
       puts "_" * 50
     end
