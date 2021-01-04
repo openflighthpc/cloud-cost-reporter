@@ -409,17 +409,6 @@ class AwsProject < Project
     total_cost_log
   end
 
-  def get_cost_per_hour(resource_name, region)
-    begin
-      result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
-    rescue Aws::Pricing::Errors::ServiceError, Seahorse::Client::NetworkingError => error
-      raise AwsSdkError.new("Unable to get prices for instance type #{resource_name} in region #{region}. #{error if @verbose}") 
-    end
-    details = JSON.parse(result.first)["terms"]["OnDemand"]
-    details = details[details.keys[0]]["priceDimensions"]
-    details[details.keys[0]]["pricePerUnit"]["USD"].to_f
-  end
-
   def get_overall_usage(date, customer_facing=false)
     logs = self.instance_logs.where('timestamp LIKE ? AND status IS NOT ?', "%#{date}%", "terminated").where(compute: 1)
 
@@ -726,46 +715,6 @@ class AwsProject < Project
           }
         ]
       }
-    }
-  end
-
-  def pricing_query(resource_name, region)
-    {
-      service_code: "AmazonEC2",
-      filters: [ 
-        {
-          field: "instanceType", 
-          type: "TERM_MATCH", 
-          value: resource_name, 
-        },
-        {
-          field: "location", 
-          type: "TERM_MATCH", 
-          value: @@region_mappings[region], 
-        },
-        {
-          field: "tenancy",
-          type: "TERM_MATCH",
-          value: "shared"
-        },
-        {
-          field: "capacitystatus",
-          type: "TERM_MATCH",
-          value: "UnusedCapacityReservation"
-        },
-        {
-          field: "operatingSystem",
-          type: "TERM_MATCH",
-          value: "linux"
-        },
-        {
-          field: "preInstalledSW",
-          type: "TERM_MATCH", 
-          value: "NA"
-        }
-     ], 
-     format_version: "aws_v1",
-     max_results: 1
     }
   end
 
