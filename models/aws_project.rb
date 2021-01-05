@@ -290,15 +290,21 @@ class AwsProject < Project
   end
 
   def get_latest_prices
-    instance_types = self.instance_logs.where(host: "AWS").group(:region, :instance_type).pluck(:instance_type, :region)
-    instance_types.each do |instance_type_details|
-      instance_type = instance_type_details[0]
-      region = instance_type_details[1]
-      if !@@prices.has_key?(region)
-        @@prices[region] = {}
-      end
-      if !@@prices[region].has_key?(instance_type)
-        @@prices[region][instance_type] = get_cost_per_hour(instance_type, region)
+    if @@prices == {}
+      get_aws_instance_info
+      File.foreach('aws_instance_details.txt').with_index do |entry, index|
+        if index > 1
+          entry = JSON.parse(entry)
+          instance_type = entry['instance_type']
+          region = entry['location']
+          if !@@prices.has_key?(region)
+            @@prices[region] = {}
+          end
+
+          if !@@prices[region].has_key?(instance_type)
+            @@prices[region][instance_type] = entry['price_per_hour'].to_f
+          end
+        end
       end
     end
   end
@@ -428,17 +434,6 @@ class AwsProject < Project
       end
     end
     total_cost_log
-  end
-
-  def get_cost_per_hour(resource_name, region)
-    begin
-      result = @pricing_checker.get_products(pricing_query(resource_name, region)).price_list
-    rescue Aws::Pricing::Errors::ServiceError, Seahorse::Client::NetworkingError => error
-      raise AwsSdkError.new("Unable to get prices for instance type #{resource_name} in region #{region}. #{error if @verbose}") 
-    end
-    details = JSON.parse(result.first)["terms"]["OnDemand"]
-    details = details[details.keys[0]]["priceDimensions"]
-    details[details.keys[0]]["pricePerUnit"]["USD"].to_f
   end
 
   def get_overall_usage(date, customer_facing=false)
@@ -761,46 +756,6 @@ class AwsProject < Project
           }
         ]
       }
-    }
-  end
-
-  def pricing_query(resource_name, region)
-    {
-      service_code: "AmazonEC2",
-      filters: [ 
-        {
-          field: "instanceType", 
-          type: "TERM_MATCH", 
-          value: resource_name, 
-        },
-        {
-          field: "location", 
-          type: "TERM_MATCH", 
-          value: @@region_mappings[region], 
-        },
-        {
-          field: "tenancy",
-          type: "TERM_MATCH",
-          value: "shared"
-        },
-        {
-          field: "capacitystatus",
-          type: "TERM_MATCH",
-          value: "UnusedCapacityReservation"
-        },
-        {
-          field: "operatingSystem",
-          type: "TERM_MATCH",
-          value: "linux"
-        },
-        {
-          field: "preInstalledSW",
-          type: "TERM_MATCH", 
-          value: "NA"
-        }
-     ], 
-     format_version: "aws_v1",
-     max_results: 1
     }
   end
 

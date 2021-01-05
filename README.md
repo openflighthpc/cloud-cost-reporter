@@ -173,7 +173,7 @@ You can also run `ruby get_latest_azure_prices.rb`, which will use an existing A
 
 ### Recording Azure Instance Details and AWS Instance Details & Pricing
 
-The application also includes initial versions of the files `aws_instance_details.txt` and `azure_instance_sizes.txt`. These are not required for this application, but are used by the associated openflight `cloud-cost-visualiser` project, with the files generated here as they require a valid AWS / Azure project for retrieving the data. These can be updated by runing `ruby get_latest_aws_instance_info` and `ruby get_latest_azure_instance_sizes.rb` respectively.
+The application also includes initial versions of the files `aws_instance_details.txt` and `azure_instance_sizes.txt`. The latter is not required for this application, but both are used by the associated openflight `cloud-cost-visualiser` project, with the files generated here as they require a valid AWS / Azure project for retrieving the data. These can be updated by runing `ruby get_latest_aws_instance_info` and `ruby get_latest_azure_instance_sizes.rb` respectively. `aws_instance_details.txt` is also updated when generating a weekly report for an AWS project (if the existing file is not already up to date).
 
 ### Recording historic cost logs
 
