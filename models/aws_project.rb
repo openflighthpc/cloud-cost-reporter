@@ -96,7 +96,7 @@ class AwsProject < Project
       @pricing_checker = Aws::Pricing::Client.new(access_key_id: self.access_key_ident, secret_access_key: self.key)
     rescue Aws::Errors::MissingRegionError => error
       puts "Unable to create AWS SDK objects due to missing region: #{error}"
-      return
+      return false
     end
 
     begin
@@ -128,7 +128,7 @@ class AwsProject < Project
     valid
   end
 
-  def daily_report(date=(DEFAULT_DATE), slack=true, text=true, rerun=false, verbose=false, customer_facing=false, short=false)
+  def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false, short=false)
     @verbose = verbose
     start_date = Date.parse(self.start_date)
     if date < start_date
@@ -143,9 +143,9 @@ class AwsProject < Project
     
     cached = !rerun && self.cost_logs.find_by(date: date.to_s, scope: "total")
 
-    compute_cost_log = get_compute_costs(date, rerun)
-    data_out_cost_log, data_out_amount_log = get_data_out_figures(date, rerun)
-    total_cost_log = get_total_costs(date, rerun)
+    compute_cost_log = get_compute_costs(date, date + 1.day, rerun)
+    data_out_cost_log, data_out_amount_log = get_data_out_figures(date, date + 1.day, rerun)
+    total_cost_log = get_total_costs(date, date + 1.day, rerun)
     overall_usage = get_overall_usage(date, customer_facing)
     usage_breakdown = get_usage_hours_by_instance_type(date, rerun, customer_facing)
 
@@ -303,101 +303,128 @@ class AwsProject < Project
     end
   end
 
-  def get_compute_costs(date, rerun)
-    compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
+  def get_compute_costs(start_date, end_date, rerun)
+    compute_cost_log = nil
+    if end_date == start_date + 1.day
+      compute_cost_log = self.cost_logs.find_by(date: start_date.to_s, scope: "compute")
+    end
 
-    # only make query if don't already have data in logs or asked to recalculate
+    # for daily report, only make query if don't already have data in logs or asked to recalculate
     if !compute_cost_log || rerun
       begin
-        compute_cost = @explorer.get_cost_and_usage(compute_cost_query(date)).results_by_time[0][:total]["UnblendedCost"][:amount].to_f
+        response = @explorer.get_cost_and_usage(compute_cost_query(start_date, end_date)).results_by_time
       rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
         raise AwsSdkError.new("Unable to determine compute costs for project #{self.name}. #{error if @verbose}") 
       end
-      if rerun && compute_cost_log
-        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
-        compute_cost_log.save!
-      else
-        compute_cost_log = CostLog.create(
-          project_id: self.id,
-          cost: compute_cost,
-          currency: "USD",
-          date: date.to_s,
-          scope: "compute",
-          timestamp: Time.now.to_s
-        )
+
+      response.each do |day|
+        date = day[:time_period][:start]
+        compute_cost = day[:total]["UnblendedCost"][:amount].to_f
+        compute_cost_log = self.cost_logs.find_by(date: date, scope: "compute")
+        if rerun && compute_cost_log
+          compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
+          compute_cost_log.save!
+        else
+          compute_cost_log = CostLog.create(
+            project_id: self.id,
+            cost: compute_cost,
+            currency: "USD",
+            date: date,
+            scope: "compute",
+            timestamp: Time.now.to_s
+          )
+        end
       end
     end
     compute_cost_log
   end
 
-  def get_data_out_figures(date, rerun)
-    data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
-    data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")
+  def get_data_out_figures(start_date, end_date, rerun)
+    data_out_cost_log = nil
+    data_out_amount_log = nil
+    if end_date == start_date + 1.day
+      data_out_cost_log = self.cost_logs.find_by(date: start_date, scope: "data_out")
+      data_out_amount_log = self.usage_logs.find_by(start_date: start_date, description: "data_out")
+    end
     data_out_figures = nil
     # only make query if don't already have data in logs or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
       begin
-        data_out_figures = @explorer.get_cost_and_usage(data_out_query(date)).results_by_time[0]
+        data_out_figures = @explorer.get_cost_and_usage(data_out_query(start_date, end_date)).results_by_time
       rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
         raise AwsSdkError.new("Unable to determine data out figures for project #{self.name}. #{error if @verbose}") 
       end
-      data_out_cost = data_out_figures.total["UnblendedCost"][:amount]
-      data_out_amount = data_out_figures.total["UsageQuantity"][:amount]
-      
-      if data_out_cost_log && rerun
-        data_out_cost_log.assign_attributes(cost: data_out_cost, timestamp: Time.now.to_s)
-        data_out_cost_log.save!
-      else
-        data_out_cost_log = CostLog.create(
-          project_id: self.id,
-          cost: data_out_cost,
-          currency: "USD",
-          date: date.to_s,
-          scope: "data_out",
-          timestamp: Time.now.to_s
-        )
-      end
+      data_out_figures.each do |day|
+        date = Date.parse(day[:time_period][:start])
+        data_out_cost = day[:total]["UnblendedCost"][:amount]
+        data_out_amount = day[:total]["UsageQuantity"][:amount]
 
-      if data_out_amount_log && rerun
-        data_out_amount_log.assign_attributes(amount: data_out_amount, timestamp: Time.now.to_s)
-        data_out_amount_log.save!
-      else
-        data_out_amount_log = UsageLog.create(
-          project_id: self.id,
-          amount: data_out_amount,
-          unit: "GB",
-          start_date: date.to_s,
-          end_date: (date + 1).to_s,
-          description: "data_out",
-          scope: "project",
-          timestamp: Time.now.to_s
-        )
+        data_out_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "data_out")
+        data_out_amount_log = self.usage_logs.find_by(start_date: date.to_s, description: "data_out")
+      
+        if data_out_cost_log && rerun
+          data_out_cost_log.assign_attributes(cost: data_out_cost, timestamp: Time.now.to_s)
+          data_out_cost_log.save!
+        else
+          data_out_cost_log = CostLog.create(
+            project_id: self.id,
+            cost: data_out_cost,
+            currency: "USD",
+            date: date.to_s,
+            scope: "data_out",
+            timestamp: Time.now.to_s
+          )
+        end
+
+        if data_out_amount_log && rerun
+          data_out_amount_log.assign_attributes(amount: data_out_amount, timestamp: Time.now.to_s)
+          data_out_amount_log.save!
+        else
+          data_out_amount_log = UsageLog.create(
+            project_id: self.id,
+            amount: data_out_amount,
+            unit: "GB",
+            start_date: date.to_s,
+            end_date: (date + 1).to_s,
+            description: "data_out",
+            scope: "project",
+            timestamp: Time.now.to_s
+          )
+        end
       end
     end
     return data_out_cost_log, data_out_amount_log
   end
 
-  def get_total_costs(date, rerun)
-    total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
+  def get_total_costs(start_date, end_date, rerun)
+    total_cost_log = nil
+    if end_date == start_date + 1.day
+      total_cost_log = self.cost_logs.find_by(date: start_date.to_s, scope: "total")
+    end  
     # only make query if don't already have data in logs or asked to recalculate
     if !total_cost_log || rerun
       begin
-        daily_cost = @explorer.get_cost_and_usage(all_costs_query(date)).results_by_time[0].total["UnblendedCost"][:amount]
+        daily_costs = @explorer.get_cost_and_usage(all_costs_query(start_date, end_date)).results_by_time
       rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
         raise AwsSdkError.new("Unable to determine total costs for project #{self.name}. #{error if @verbose}") 
       end
-      if total_cost_log && rerun
-        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
-        total_cost_log.save!
-      else
-        total_cost_log = CostLog.create(
-          project_id: self.id,
-          cost: daily_cost,
-          currency: "USD",
-          date: date.to_s,
-          scope: "total",
-          timestamp: Time.now.to_s
-        )
+      daily_costs.each do |day|
+        date = day[:time_period][:start]
+        daily_cost = day[:total]["UnblendedCost"][:amount]
+        total_cost_log = self.cost_logs.find_by(date: date, scope: "total")
+        if total_cost_log && rerun
+          total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
+          total_cost_log.save!
+        else
+          total_cost_log = CostLog.create(
+            project_id: self.id,
+            cost: daily_cost,
+            currency: "USD",
+            date: date,
+            scope: "total",
+            timestamp: Time.now.to_s
+          )
+        end
       end
     end
     total_cost_log
@@ -442,50 +469,55 @@ class AwsProject < Project
     overall_usage == "" ? "None recorded" : overall_usage.strip
   end
 
-  def get_usage_hours_by_instance_type(date=(DEFAULT_DATE), rerun=false, customer_facing=false)
-    logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: date).where(end_date: date + 1)
-    logs.delete_all if rerun
-    usage_breakdown = "\n\t\t\t\t"
-    compute_other = []
-    if !logs.any?
-      begin
-        usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(date))
-      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
-        raise AwsSdkError.new("Unable to determine hours by instance type for project #{self.name}. #{error if @verbose}") 
-      end
-      usage_by_instance_type.results_by_time[0].groups.each do |group|
-        instance_type = group[:keys][0]
-        amount = group[:metrics]["UsageQuantity"][:amount].to_f.round(2)
-        log = UsageLog.create(
-          project_id: self.id,
-          description: instance_type,
-          amount: amount,
-          unit: "hours",
-          scope: "compute",
-          start_date: date,
-          end_date: date + 1,
-          timestamp: Time.now
-        )
-        if customer_facing
-          mapping = InstanceMapping.find_by(instance_type: instance_type)
-          if mapping
-            instance_type = mapping.customer_facing_name
-          else
-            compute_other << log
-          end
+  def get_usage_hours(start_date, end_date, rerun=false)
+    all_logs = []
+    begin
+      usage_by_instance_type = @explorer.get_cost_and_usage(compute_instance_type_usage_query(start_date, end_date))
+    rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
+      raise AwsSdkError.new("Unable to determine hours by instance type for project #{self.name}. #{error if @verbose}") 
+    end
+    usage_by_instance_type.results_by_time.each do |day|
+      date = Date.parse(day[:time_period][:start])
+      next_day = date + 1.day
+      logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: date.to_s).where(end_date: next_day.to_s)
+      logs.delete_all if rerun
+      if !logs.any?
+        day.groups.each do |group|
+          instance_type = group[:keys][0]
+          amount = group[:metrics]["UsageQuantity"][:amount].to_f.round(2)
+          all_logs << UsageLog.create(
+            project_id: self.id,
+            description: instance_type,
+            amount: amount,
+            unit: "hours",
+            scope: "compute",
+            start_date: date.to_s,
+            end_date: next_day.to_s,
+            timestamp: Time.now
+          )
         end
-        usage_breakdown << "#{instance_type}: #{amount} hours \n\t\t\t\t" if !compute_other.include?(log)
-      end
-    else
-      logs.each do |log|
-        type = customer_facing ? log.customer_facing_type : log.description
-        if type == "Compute (Other)"
-          compute_other << log
-        else
-          usage_breakdown << "#{type}: #{log.amount} hours \n\t\t\t\t"
-        end
+      else
+        all_logs << logs
       end
     end
+    all_logs.flatten
+  end
+
+  def get_usage_hours_by_instance_type(start_date=DEFAULT_DATE, rerun=false, customer_facing=false)
+    logs = self.usage_logs.where(unit: "hours").where(scope: "compute").where(start_date: start_date).where(end_date: start_date + 1.day)
+    logs = get_usage_hours(start_date, start_date + 1.day, rerun) if !logs.any? || rerun
+    usage_breakdown = "\n\t\t\t\t"
+    compute_other = []
+    
+    logs.each do |log|
+      type = customer_facing ? log.customer_facing_type : log.description
+      if type == "Compute (Other)"
+        compute_other << log
+      else
+        usage_breakdown << "#{type}: #{log.amount} hours \n\t\t\t\t"
+      end
+    end
+
     compute_other_hours = compute_other.reduce(0.0) { |sum, log| sum + log.amount }.ceil(2)
     usage_breakdown << "Compute (Other): #{compute_other_hours} hours \n\t\t\t\t" if compute_other.any?
     usage_breakdown == "\n\t\t\t\t" ? "None" : usage_breakdown
@@ -537,6 +569,15 @@ class AwsProject < Project
 
   def get_data_out(date=DEFAULT_DATE)
     @explorer.get_cost_and_usage(data_out_query(date))
+  end
+
+  def record_logs_for_range(start_date, end_date, rerun=false)
+    # AWS SDK does not include end date, so must increment by one day
+    end_date = end_date + 1.day
+    get_compute_costs(start_date, end_date, rerun)
+    get_data_out_figures(start_date, end_date, rerun)
+    get_total_costs(start_date, end_date, rerun)
+    get_usage_hours(start_date, end_date, rerun)
   end
 
   def get_aws_instance_info
@@ -653,11 +694,11 @@ class AwsProject < Project
     }
   end
 
-  def compute_instance_type_usage_query(date)
+  def compute_instance_type_usage_query(start_date, end_date=start_date + 1.day)
     {
       time_period: {
-        start: date.to_s,
-        end: (date + 1).to_s
+        start: start_date.to_s,
+        end: end_date.to_s
       },
       granularity: "DAILY",
       metrics: ["USAGE_QUANTITY"],

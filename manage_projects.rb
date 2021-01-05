@@ -429,24 +429,45 @@ def add_project
   Budget.create(project_id: project.id, amount: budget, effective_at: project.start_date, timestamp: Time.now)
   puts "Project #{project.name} created"
   
-  stop = false
-  while !stop
+  credentials = nil
+  valid = false
+  while !valid
+    print "Validate credentials (y/n)? "
+    response = gets.chomp.downcase
+    if response == "n"
+      valid = true
+    elsif response == "y"
+      valid = true
+      credentials = validate_credentials(project)
+    else
+      puts "Invalid response. Please try again"
+    end
+  end
+
+  if credentials != false && Date.parse(project.start_date) < Project::DEFAULT_DATE
     valid = false
     while !valid
-      print "Validate credentials (y/n)? "
+      print "Project start date is in the past. Would you like to retrieve and record historic costs (y/n)? "
+      print "This may take a long time (5+ mins per month of data). " if project.host == "azure"
       response = gets.chomp.downcase
       if response == "n"
         stop = true
         valid = true
       elsif response == "y"
+        "Recording logs"
         valid = true
+        project = ProjectFactory.new().as_type(project)
+        begin
+          project.record_logs_for_range(Date.parse(project.start_date), Project::DEFAULT_DATE - 1.day)
+        rescue AzureApiError, AwsSdkError => e
+          puts "Generation of logs for project #{project.name} stopped due to error: "
+          puts e
+          return
+        end
+        puts "Logs recorded."
       else
         puts "Invalid response. Please try again"
       end
-    end
-    if !stop
-      stop = true
-      validate_credentials(project)
     end
   end
 end
@@ -454,7 +475,6 @@ end
 def validate_credentials(project)
   project = @factory.as_type(project)
   project.validate_credentials
-  puts
 end
 
 def add_budget(project)
