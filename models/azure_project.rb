@@ -63,12 +63,16 @@ class AzureProject < Project
     @metadata['bearer_expiry']
   end
 
-  def today_compute_nodes
-    @today_compute_nodes ||= api_query_compute_nodes
+  def today_compute_and_core_nodes
+    @today_compute_and_core_nodes ||= api_query_compute_and_core_nodes
   end
 
   def historic_compute_nodes(date)
-    self.instance_logs.where("timestamp LIKE ?", "%#{date}%").where(compute: 1) 
+    self.instance_logs.where("timestamp LIKE ?", "%#{date}%").where(compute: 1)
+  end
+
+  def historic_core_nodes(date)
+    self.instance_logs.where("timestamp LIKE ?", "%#{date}%").where(function_type: "core") 
   end
 
   def resource_groups
@@ -140,6 +144,7 @@ class AzureProject < Project
       total_cost_log = get_total_costs(response, date, rerun)
       data_out_cost_log, data_out_amount_log = get_data_out_figures(response, date, rerun)
       compute_cost_log = get_compute_costs(response, date, rerun)
+      core_cost_log = get_core_costs(response, date, rerun)
     end
 
     overall_usage = get_overall_usage(date, customer_facing)
@@ -309,17 +314,18 @@ class AzureProject < Project
       active_nodes&.each do |node|
         name = node['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
         region = node['location']
-        cnode = today_compute_nodes.detect do |compute_node|
-                  compute_node['name'] == name
+        cnode = today_compute_and_core_nodes.detect do |project_node|
+                  project_node['name'] == name
                 end
-        type = cnode['properties']['hardwareProfile']['vmSize']
-        compute = cnode.key?('tags') && cnode['tags']['type'] == 'compute'
+        instance_type = cnode['properties']['hardwareProfile']['vmSize']
+        function_type = cnode.key?('tags') && cnode['tags']['type']
         InstanceLog.create(
           instance_id: node['id'],
           project_id: id,
-          instance_type: type,
+          instance_type: instance_type,
           instance_name: name,
-          compute: compute ? 1 : 0,
+          compute: function_type == "compute" ? 1 : 0,
+          function_type: function_type,
           status: node['properties']['availabilityState'],
           host: 'Azure',
           region: region,
@@ -368,6 +374,7 @@ class AzureProject < Project
                   rescue NoMethodError
                     0.0
                   end
+      daily_cost ||= 0.0
 
       if rerun && total_cost_log
         total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
@@ -389,13 +396,14 @@ class AzureProject < Project
   def get_compute_costs(cost_entries, date, rerun)
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
-    if !compute_cost_log
+    if !compute_cost_log || rerun
       compute_costs = cost_entries.select { |cd| historic_compute_nodes(date).any? { |node| node.instance_name == cd['properties']['resourceName'] } }
       compute_cost = begin
                       compute_costs.map { |c| c['properties']['cost'] }.reduce(:+)
                      rescue NoMethodError
                       0.0
                      end
+      compute_cost ||= 0.0
       if rerun && compute_cost_log
         compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
         compute_cost_log.save!
@@ -411,6 +419,34 @@ class AzureProject < Project
       end
     end
     compute_cost_log
+  end
+
+  def get_core_costs(cost_entries, date, rerun)
+    core_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "core")
+
+    if !core_cost_log || rerun
+      core_costs = cost_entries.select { |cd| historic_core_nodes(date).any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      core_cost = begin
+                      core_costs.map { |c| c['properties']['cost'] }.reduce(:+)
+                     rescue NoMethodError
+                      0.0
+                     end
+      core_cost ||= 0.0
+      if rerun && core_cost_log
+        core_cost_log.assign_attributes(cost: core_cost, timestamp: Time.now.to_s)
+        core_cost_log.save!
+      else
+        core_cost_log = CostLog.create(
+          project_id: id,
+          cost: core_cost,
+          currency: 'GBP',
+          scope: 'core',
+          date: date.to_s,
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    core_cost_log
   end
 
   def get_data_out_figures(cost_entries, date, rerun)
@@ -474,11 +510,12 @@ class AzureProject < Project
         get_total_costs(response, date, rerun)
         get_compute_costs(response, date, rerun)
         get_data_out_figures(response, date, rerun)
+        get_core_costs(response, date, rerun)
       end
     end
   end
 
-  def api_query_compute_nodes
+  def api_query_compute_and_core_nodes
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/virtualMachines"
     query = {
       'api-version': '2020-06-01',
@@ -495,17 +532,20 @@ class AzureProject < Project
 
       if response.success?
         vms = response['value']
-        vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
+        vms.select do |vm|
+          vm.key?('tags') && (vm['tags']['type'] == 'compute' || vm['tags']['type'] == 'core') && 
+          self.resource_groups.include?(vm['id'].split('/')[4].downcase)
+        end
       elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
         raise Net::ReadTimeout
       else
-        raise AzureApiError.new("Error querying compute nodes for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
+        raise AzureApiError.new("Error querying compute and core nodes for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
       end
     rescue Net::ReadTimeout
       if attempt < MAX_API_ATTEMPTS
         retry
       else
-        raise AzureApiError.new("Timeout error querying compute nodes for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+        raise AzureApiError.new("Timeout error querying compute and core nodes for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
       end
     end 
   end
@@ -569,7 +609,7 @@ class AzureProject < Project
         nodes.select do |node|
           r_group = node['id'].split('/')[4].downcase
           if self.resource_groups.include?(r_group)
-            today_compute_nodes.any? do |cn|
+            today_compute_and_core_nodes.any? do |cn|
               node['id'].match(/virtualMachines\/(.*)\/providers/i)[1] == cn['name']
             end
           end
