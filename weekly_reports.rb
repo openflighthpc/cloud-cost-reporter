@@ -33,9 +33,14 @@ def all_projects(date, slack, text, rerun, verbose, customer_facing)
     begin
       project.weekly_report(date, slack, text, rerun, verbose, customer_facing)
     rescue AzureApiError, AwsSdkError => e
-      puts "Generation of weekly report for project #{project.name} stopped due to error: "
-      puts e
-      puts "_" * 50
+      error = <<~MSG
+      Generation of weekly report for project #{project.name} stopped due to error:
+      #{e}
+      #{"_" * 50}
+      MSG
+
+      project.send_slack_message(error)
+      puts error.gsub("*", "")
     end
   end
 end
