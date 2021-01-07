@@ -39,7 +39,7 @@ def all_projects(date, slack, text, rerun, verbose, customer_facing, short)
       #{"_" * 50}
       MSG
 
-      project.send_slack_message(error)
+      project.send_slack_message(error) if slack
       puts error.gsub("*", "")
     end
   end
