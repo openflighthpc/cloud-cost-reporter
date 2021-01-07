@@ -37,7 +37,7 @@ For AWS projects you also need to supply your 12 digit `AWS Account ID`, which c
 
 ### Azure
 
-In this application, Azure projects are assumed to be confined to a single Azure resource group (to be specified at project creation). In addition, it is required that compute nodes be given the `"type" => "compute"` tag on the Azure platform and core infrastructure given the `"type" => "core"` tag.
+In this application, Azure projects are assumed to be confined to a single Azure resource group (to be specified at project creation). In addition, it is required that compute nodes be given the `"type" => "compute"` tag on the Azure platform and core infrastructure given the `"type" => "core"` tag. If compute groups are being used, compute nodes must also be identified with the tag `"compute_group" => "groupname"`.
 
 The point at which tags are added does not affect the data pulled from the Azure API. As long as the resources that you want to analyse have the tag, the detail objects associated with that resource will be queried.
 

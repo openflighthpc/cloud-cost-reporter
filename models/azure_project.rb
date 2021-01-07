@@ -395,7 +395,6 @@ class AzureProject < Project
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
     if !compute_cost_log || rerun
-
       compute_costs = cost_entries.select do |cost|
         historic_compute_nodes(date).any? do |node| 
           node.instance_name == cost['properties']['resourceName'] &&
