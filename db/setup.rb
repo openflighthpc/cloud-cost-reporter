@@ -55,6 +55,7 @@ db.execute "CREATE TABLE IF NOT EXISTS instance_logs(
   instance_type TEXT,
   region TEXT,
   compute INTEGER,
+  compute_group TEXT,
   status TEXT,
   timestamp TEXT
 )"

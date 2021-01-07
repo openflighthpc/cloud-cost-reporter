@@ -315,12 +315,14 @@ class AzureProject < Project
                 end
         type = cnode['properties']['hardwareProfile']['vmSize']
         compute = cnode.key?('tags') && cnode['tags']['type'] == 'compute'
+        compute_group = cnode.key?('tags') ? cnode['tags']['compute_group'] : nil
         InstanceLog.create(
           instance_id: node['id'],
           project_id: id,
           instance_type: type,
           instance_name: name,
           compute: compute ? 1 : 0,
+          compute_group: compute_group,
           status: node['properties']['availabilityState'],
           host: 'Azure',
           region: region,
