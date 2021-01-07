@@ -683,6 +683,14 @@ class AwsProject < Project
               }
             }
           },
+          {
+            not: {
+              dimensions: {
+                key: "SERVICE",
+                values: ["Tax"]
+              }
+            }
+          },
           project_filter
         ]
       },
@@ -751,6 +759,14 @@ class AwsProject < Project
               dimensions: {
                 key: "RECORD_TYPE",
                 values: ["CREDIT"]
+              }
+            }
+          },
+          {
+            not: {
+              dimensions: {
+                key: "SERVICE",
+                values: ["Tax"]
               }
             }
           }
