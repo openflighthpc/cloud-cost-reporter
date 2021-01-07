@@ -68,7 +68,7 @@ class AzureProject < Project
   end
 
   def historic_compute_nodes(date)
-    self.instance_logs.where("timestamp LIKE ?", "%#{date}%").where(compute: 1) 
+    self.instance_logs.where("timestamp LIKE ?", "%#{date}%").where(compute: 1)
   end
 
   def resource_groups
@@ -140,6 +140,7 @@ class AzureProject < Project
       total_cost_log = get_total_costs(response, date, rerun)
       data_out_cost_log, data_out_amount_log = get_data_out_figures(response, date, rerun)
       compute_cost_log = get_compute_costs(response, date, rerun)
+      core_cost_log = get_core_costs(response, date, rerun)
     end
 
     overall_usage = get_overall_usage(date, customer_facing)
@@ -147,7 +148,7 @@ class AzureProject < Project
     msg = [
         "#{"*Cached report*" if cached}",
         ":moneybag: Usage for *#{self.name}* on #{date.to_s} :moneybag:",
-        "*Compute Cost (GBP):* #{compute_cost_log.cost.to_f.ceil(2)}",
+        "*Compute Costs (GBP):* #{compute_cost_log.cost.to_f.ceil(2)}",
         ("*Compute Units (Flat):* #{compute_cost_log.compute_cost}" if !short),
         ("*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n" if !short),
         ("*Data Out (GB):* #{data_out_amount_log.amount.to_f.ceil(4)}" if !short),
@@ -368,6 +369,7 @@ class AzureProject < Project
                   rescue NoMethodError
                     0.0
                   end
+      daily_cost ||= 0.0
 
       if rerun && total_cost_log
         total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
@@ -386,16 +388,24 @@ class AzureProject < Project
     total_cost_log
   end
 
+  # This is just the cost for running the compute VMs, does not include costs related to associated storage or data out costs.
   def get_compute_costs(cost_entries, date, rerun)
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
-    if !compute_cost_log
-      compute_costs = cost_entries.select { |cd| historic_compute_nodes(date).any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+    if !compute_cost_log || rerun
+      compute_costs = cost_entries.select do |cost|
+        historic_compute_nodes(date).any? do |node| 
+          node.instance_name == cost['properties']['resourceName'] &&
+          !(cost['properties']["additionalInfo"] &&
+          JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut"))
+        end
+      end
       compute_cost = begin
                       compute_costs.map { |c| c['properties']['cost'] }.reduce(:+)
                      rescue NoMethodError
                       0.0
                      end
+      compute_cost ||= 0.0
       if rerun && compute_cost_log
         compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
         compute_cost_log.save!
@@ -411,6 +421,39 @@ class AzureProject < Project
       end
     end
     compute_cost_log
+  end
+
+  # This includes any resources tagged as core, including storage. Does not include data out costs.
+  def get_core_costs(cost_entries, date, rerun)
+    core_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "core")
+
+    if !core_cost_log || rerun
+      core_costs = cost_entries.select do |cost|
+        cost["tags"] && cost["tags"]["type"] == "core" &&
+        !(cost['properties']["additionalInfo"] &&
+        JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut"))
+      end  
+      core_cost = begin
+                      core_costs.map { |c| c['properties']['cost'] }.reduce(:+)
+                     rescue NoMethodError
+                      0.0
+                     end
+      core_cost ||= 0.0
+      if rerun && core_cost_log
+        core_cost_log.assign_attributes(cost: core_cost, timestamp: Time.now.to_s)
+        core_cost_log.save!
+      else
+        core_cost_log = CostLog.create(
+          project_id: id,
+          cost: core_cost,
+          currency: 'GBP',
+          scope: 'core',
+          date: date.to_s,
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    core_cost_log
   end
 
   def get_data_out_figures(cost_entries, date, rerun)
@@ -474,6 +517,7 @@ class AzureProject < Project
         get_total_costs(response, date, rerun)
         get_compute_costs(response, date, rerun)
         get_data_out_figures(response, date, rerun)
+        get_core_costs(response, date, rerun)
       end
     end
   end
