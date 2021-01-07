@@ -388,11 +388,18 @@ class AzureProject < Project
     total_cost_log
   end
 
+  # This is just the cost for running the compute VMs, does not include costs related to associated storage or data out costs.
   def get_compute_costs(cost_entries, date, rerun)
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
     if !compute_cost_log || rerun
-      compute_costs = cost_entries.select { |cd| historic_compute_nodes(date).any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      compute_costs = cost_entries.select do |cost|
+        historic_compute_nodes(date).any? do |node| 
+          node.instance_name == cost['properties']['resourceName'] &&
+          !(cost['properties']["additionalInfo"] &&
+          JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut"))
+        end
+      end
       compute_cost = begin
                       compute_costs.map { |c| c['properties']['cost'] }.reduce(:+)
                      rescue NoMethodError
@@ -416,6 +423,7 @@ class AzureProject < Project
     compute_cost_log
   end
 
+  # This includes any resources tagged as core, including storage. Does not include data out costs.
   def get_core_costs(cost_entries, date, rerun)
     core_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "core")
 
