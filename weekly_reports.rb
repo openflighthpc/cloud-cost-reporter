@@ -36,10 +36,10 @@ def all_projects(date, slack, text, rerun, verbose, customer_facing)
       error = <<~MSG
       Generation of weekly report for project #{project.name} stopped due to error:
       #{e}
-      #{"_" * 50}
       MSG
 
       project.send_slack_message(error) if slack
+      error << "\n#{"_" * 50}"
       puts error.gsub("*", "")
     end
   end
