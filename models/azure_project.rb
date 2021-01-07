@@ -395,6 +395,7 @@ class AzureProject < Project
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
     if !compute_cost_log || rerun
+
       compute_costs = cost_entries.select do |cost|
         historic_compute_nodes(date).any? do |node| 
           node.instance_name == cost['properties']['resourceName'] &&
@@ -402,24 +403,42 @@ class AzureProject < Project
           JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut"))
         end
       end
-      compute_cost = begin
-                      compute_costs.map { |c| c['properties']['cost'] }.reduce(:+)
-                     rescue NoMethodError
-                      0.0
-                     end
-      compute_cost ||= 0.0
+
+      cost_breakdown = {total: 0.0}
+      compute_costs = cost_entries.select { |cd| historic_compute_nodes(date).any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      compute_costs.each do |cost|
+        value = cost['properties']['cost']
+        group = cost["tags"] ? cost["tags"]["compute_group"] : nil
+        cost_breakdown[:total] += value
+        if group && !cost_breakdown.has_key?(group)
+          cost_breakdown[group] = value
+        elsif group
+          cost_breakdown[group] += value
+        end
+      end
+
       if rerun && compute_cost_log
-        compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
-        compute_cost_log.save!
+        cost_breakdown.each do |key, value|
+          scope = key == :total ? "compute" : key
+          log = self.cost_logs.find_by(date: date.to_s, scope: scope)
+          if log
+            log.assign_attributes(cost: cost_breakdown[key], timestamp: Time.now.to_s)
+            log.save!
+          end
+        end
       else
-        compute_cost_log = CostLog.create(
-          project_id: id,
-          cost: compute_cost,
-          currency: 'GBP',
-          scope: 'compute',
-          date: date.to_s,
-          timestamp: Time.now.to_s
-        )
+        cost_breakdown.each do |key, value|
+          scope = key == :total ? "compute" : key
+          log = CostLog.create(
+            project_id: id,
+            cost: cost_breakdown[key],
+            currency: 'GBP',
+            scope: scope,
+            date: date.to_s,
+            timestamp: Time.now.to_s
+          )
+          compute_cost_log = log if key == :total
+        end
       end
     end
     compute_cost_log
