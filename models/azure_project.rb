@@ -415,22 +415,17 @@ class AzureProject < Project
           cost_breakdown[group] += value
         end
       end
-
-      if rerun && compute_cost_log
-        cost_breakdown.each do |key, value|
-          scope = key == :total ? "compute" : key
-          log = self.cost_logs.find_by(date: date.to_s, scope: scope)
-          if log
-            log.assign_attributes(cost: cost_breakdown[key], timestamp: Time.now.to_s)
-            log.save!
-          end
-        end
-      else
-        cost_breakdown.each do |key, value|
-          scope = key == :total ? "compute" : key
+      
+      cost_breakdown.each do |key, value|
+        scope = key == :total ? "compute" : key
+        log = self.cost_logs.find_by(date: date.to_s, scope: scope)
+        if log && rerun
+          log.assign_attributes(cost: cost_breakdown[key], timestamp: Time.now.to_s)
+          log.save!
+        elsif !log
           log = CostLog.create(
             project_id: id,
-            cost: cost_breakdown[key],
+            cost: value,
             currency: 'GBP',
             scope: scope,
             date: date.to_s,
