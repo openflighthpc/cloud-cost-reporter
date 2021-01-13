@@ -54,10 +54,6 @@ class AwsProject < Project
     regions.join(", ")
   end
 
-  def account_id 
-    @metadata['account_id']
-  end
-
   def filter_level
     @metadata['filter_level']
   end
