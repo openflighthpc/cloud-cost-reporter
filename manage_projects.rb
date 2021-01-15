@@ -371,7 +371,6 @@ def add_project
     metadata["regions"] = regions
     metadata["access_key_ident"] = get_non_blank("Access Key Id")
     metadata["key"] = get_non_blank("Secret Access Key")
-    metadata["account_id"] = get_non_blank("Account Id Number")
     valid = false
     while !valid
       print "Filtering level (tag/account): "

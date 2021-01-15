@@ -54,10 +54,6 @@ class AwsProject < Project
     regions.join(", ")
   end
 
-  def account_id 
-    @metadata['account_id']
-  end
-
   def filter_level
     @metadata['filter_level']
   end
@@ -630,7 +626,7 @@ class AwsProject < Project
   private
 
   def compute_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
-    {
+    query = {
       time_period: {
         start: start_date.to_s,
         end: end_date.to_s
@@ -659,14 +655,15 @@ class AwsProject < Project
               values: ["true"]
             }
           },
-          project_filter
         ]
       },
     }
+    query[:filter][:and] << project_filter if filter_level == "tag"
+    query
   end
 
   def all_costs_query(start_date, end_date=(start_date + 1), granularity="DAILY")
-    {
+    query = {
       time_period: {
         start: "#{start_date.to_s}",
         end: "#{end_date.to_s}"
@@ -691,14 +688,15 @@ class AwsProject < Project
               }
             }
           },
-          project_filter
         ]
       },
     }
+    query[:filter][:and] << project_filter if filter_level == "tag"
+    query
   end
 
   def compute_instance_type_usage_query(start_date, end_date=start_date + 1.day)
-    {
+    query = {
       time_period: {
         start: start_date.to_s,
         end: end_date.to_s
@@ -719,7 +717,6 @@ class AwsProject < Project
               values: ["EC2: Running Hours"]
             }
           },
-          project_filter,
           {
             tags: {
               key: "compute",
@@ -730,10 +727,12 @@ class AwsProject < Project
       },
       group_by: [{type: "DIMENSION", key: "INSTANCE_TYPE"}]
     }
+    query[:filter][:and] << project_filter if filter_level == "tag"
+    query
   end
 
   def data_out_query(start_date, end_date=start_date + 1, granularity="DAILY")
-    {
+    query = {
       time_period: {
         start: start_date.to_s,
         end: end_date.to_s
@@ -753,7 +752,6 @@ class AwsProject < Project
               ]
             }
           },
-          project_filter,
           {
             not: {
               dimensions: {
@@ -773,6 +771,8 @@ class AwsProject < Project
         ]
       }
     }
+    query[:filter][:and] << project_filter if filter_level == "tag"
+    query
   end
 
   def instances_info_query(region, token=nil)
@@ -821,34 +821,16 @@ class AwsProject < Project
           }, 
         ], 
       }
-    else
-      {
-        filters: [
-          {
-            name: "owner-id",
-            values: [self.account_id]
-          }
-        ]
-      }
     end
   end
 
   def project_filter
-    if filter_level == "tag"
-      {
-        tags: {
-          key: "project",
-          values: [self.name]
-        }
+    {
+      tags: {
+        key: "project",
+        values: [self.name]
       }
-    else
-      {
-        dimensions: {
-          key: "LINKED_ACCOUNT",
-          values: [self.account_id]
-        }
-      }
-    end
+    }
   end
 end
 
