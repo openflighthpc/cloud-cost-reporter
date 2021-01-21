@@ -532,12 +532,16 @@ class AwsProject < Project
           reservation.instances.each do |instance|
             named = ""
             compute = false
+            compute_group = nil
             instance.tags.each do |tag|
               if tag.key == "Name"
                 named = tag.value
               end
               if tag.key == "compute"
                 compute = tag.value == "true"
+              end
+              if tag.key == "compute_group"
+                compute_group = tag.value
               end
             end
 
@@ -547,6 +551,7 @@ class AwsProject < Project
               instance_name: named,
               instance_type: instance.instance_type,
               compute: compute,
+              compute_group: compute_group,
               status: instance.state.name,
               host: "AWS",
               region: region,
