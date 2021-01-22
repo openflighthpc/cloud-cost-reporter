@@ -140,6 +140,7 @@ class AwsProject < Project
     cached = !rerun && self.cost_logs.find_by(date: date.to_s, scope: "total")
 
     compute_cost_log = get_compute_costs(date, date + 1.day, rerun)
+    core_cost_log = get_core_costs(date, date + 1.day, rerun)
     data_out_cost_log, data_out_amount_log = get_data_out_figures(date, date + 1.day, rerun)
     total_cost_log = get_total_costs(date, date + 1.day, rerun)
     overall_usage = get_overall_usage(date, customer_facing)
@@ -339,6 +340,42 @@ class AwsProject < Project
       end
     end
     compute_cost_log
+  end
+
+  def get_core_costs(start_date, end_date, rerun)
+    core_cost_log = nil
+    if end_date == start_date + 1.day
+      core_cost_log = self.cost_logs.find_by(date: start_date.to_s, scope: "core")
+    end
+
+    # for daily report, only make query if don't already have data in logs or asked to recalculate
+    if !core_cost_log || rerun
+      begin
+        response = @explorer.get_cost_and_usage(core_cost_query(start_date, end_date)).results_by_time
+      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
+        raise AwsSdkError.new("Unable to determine core costs for project #{self.name}. #{error if @verbose}") 
+      end
+
+      response.each do |day|
+        date = day[:time_period][:start]
+        core_cost = day[:total]["UnblendedCost"][:amount].to_f
+        core_cost_log = self.cost_logs.find_by(date: date, scope: "core")
+        if rerun && core_cost_log
+          core_cost_log.assign_attributes(cost: core_cost, timestamp: Time.now.to_s)
+          core_cost_log.save!
+        else
+          core_cost_log = CostLog.create(
+            project_id: self.id,
+            cost: core_cost,
+            currency: "USD",
+            date: date,
+            scope: "core",
+            timestamp: Time.now.to_s
+          )
+        end
+      end
+    end
+    core_cost_log
   end
 
   def get_data_out_figures(start_date, end_date, rerun)
@@ -566,6 +603,7 @@ class AwsProject < Project
     # AWS SDK does not include end date, so must increment by one day
     end_date = end_date + 1.day
     get_compute_costs(start_date, end_date, rerun)
+    get_core_costs(start_date, end_date, rerun)
     get_data_out_figures(start_date, end_date, rerun)
     get_total_costs(start_date, end_date, rerun)
     get_usage_hours(start_date, end_date, rerun)
@@ -652,6 +690,37 @@ class AwsProject < Project
           {
             tags: {
               key: "compute",
+              values: ["true"]
+            }
+          },
+        ]
+      },
+    }
+    query[:filter][:and] << project_filter if filter_level == "tag"
+    query
+  end
+
+  def core_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
+    query = {
+      time_period: {
+        start: start_date.to_s,
+        end: end_date.to_s
+      },
+      granularity: granularity,
+      metrics: ["UNBLENDED_COST"],
+      filter: {
+        and:[ 
+          {
+            not: {
+              dimensions: {
+                key: "RECORD_TYPE",
+                values: ["CREDIT"]
+              }
+            }
+          },
+          {
+            tags: {
+              key: "core",
               values: ["true"]
             }
           },
