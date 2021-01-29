@@ -31,7 +31,7 @@ When creating an instance via the AWS online console, any specified tags will be
 
 When creating instances via CloudFormation, related resources will need to be explicitly tagged regardless of when you add tags to the instance (see https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-instance-tag-root-volume/ for more details).
 
-It is recommended to check that all expected resources (IPs, volumes, etc/) have the expected tag before configuring the project tracking. It is reocmmended that tags are added even if the intention is to track by account, to allow for greater flexibility and accuracy if a second project is later added to the same account.
+It is recommended to check that all expected resources (IPs, volumes, etc/) have the expected tag before configuring the project tracking. It is recommended that tags are added even if the intention is to track by account, to allow for greater flexibility and accuracy if a second project is later added to the same account.
 
 ##### Node type specificity
 
