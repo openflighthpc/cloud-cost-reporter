@@ -25,7 +25,13 @@ ruby db/add_instance_mappings.rb
 
 On AWS, projects can be tracked on an account or project tag level. For tracking by project tag, ensure that all desired resources are given a tag with the key `project` and a value of what you have named the project. Account level will include any subaccounts.
 
-These tags should be added at the point a resource is created. If adding tags to instances in the AWS online console, these tags will also be applied to their associated storage. However, if creating instances via CloudFormation, these must be tagged explictly (see https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-instance-tag-root-volume/). It is recommended that these project tags are added even if the intention is to track by account, as this will allow for greater flexibility and accuracy if a second project is later added to the same account.
+#### Resource tagging
+
+When creating an instance via the AWS online console, any specified tags will be propagated to its related resources. However, this does not occur when adding tags post-creation, and related resources will need to be tagged explicitly.
+
+When creating instances via CloudFormation, related resources will need to be explicitly tagged regardless of when you add tags to the instance (see https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-instance-tag-root-volume/ for more details).
+
+It is recommended to check that all expected resources (IPs, volumes, etc/) have the expected tag before configuring the project tracking. It is reocmmended that tags are added even if the intention is to track by account, to allow for greater flexibility and accuracy if a second project is later added to the same account.
 
 This application includes in its breakdown details of instances specifically used as compute nodes. For this to be measured accurately, the appropriate instances should have a tag added with the key `compute` and the value `true`. Again, these should be added at the point of creation. If compute groups are also being used, these should be added using the tag `compute_group`, with a value of the group name. Similarly, core infrastructure can be identified using a tag with the key `core` and the value `true`.
 
