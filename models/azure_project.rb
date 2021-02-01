@@ -600,9 +600,9 @@ class AzureProject < Project
         raise AzureApiError.new("Error querying daily cost Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
       end
     rescue Net::ReadTimeout
+      error.error_messages.append("Attempt #{attempt}:\nError code #{response.code}."\
+                                  "\n#{response if @verbose}")
       if attempt < MAX_API_ATTEMPTS
-        error.error_messages.append("Attempt #{attempt}:\nError code #{response.code}."\
-                                    "\n#{response if @verbose}")
         retry
       else
         raise error
@@ -875,7 +875,9 @@ class AzureProject < Project
 end
 
 class AzureApiError < StandardError
-  def initialize
+  attr_accessor :error_messages
+  def initialize(msg)
     @error_messages = []
+    super(msg)
   end
 end
