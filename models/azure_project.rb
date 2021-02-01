@@ -550,7 +550,7 @@ class AzureProject < Project
       if response.success?
         vms = response['value']
         vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
-      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+      elsif response.code == 504
         raise Net::ReadTimeout
       else
         raise AzureApiError.new("Error querying compute nodes for project #{name}."\
@@ -594,7 +594,7 @@ class AzureProject < Project
       )
       if response.success?
         details = response['value']
-      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+      elsif response.code == 504
         raise Net::ReadTimeout
       else
         raise AzureApiError.new("Error querying daily cost Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
@@ -637,7 +637,7 @@ class AzureProject < Project
             end
           end
         end
-      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+      elsif response.code == 504
         raise Net::ReadTimeout
       else
         raise AzureApiError.new("Error querying node status Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
@@ -679,7 +679,7 @@ class AzureProject < Project
         @metadata['bearer_expiry'] = body['expires_on']
         self.metadata = @metadata.to_json
         self.save
-      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+      elsif response.code == 504
         raise Net::ReadTimeout
       else
         raise AzureApiError.new("Error obtaining new authorization token for project #{name}.\nError code #{response.code}\n#{response if @verbose}")
@@ -739,7 +739,7 @@ class AzureProject < Project
               File.write("azure_prices.txt", "\n", mode: "a")
             end
           end
-        elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+        elsif response.code == 504
           raise Net::ReadTimeout
         else
           raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n#{response if @verbose}")
@@ -810,7 +810,7 @@ class AzureProject < Project
               File.write("azure_instance_sizes.txt", "\n", mode: "a")
             end
           end
-        elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+        elsif response.code == 504
           raise Net::ReadTimeout
         else
           raise AzureApiError.new("Error obtaining latest Azure instance list. Error code #{response.code}.\n#{response if @verbose}")
