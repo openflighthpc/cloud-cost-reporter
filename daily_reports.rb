@@ -36,6 +36,7 @@ def all_projects(date, slack, text, rerun, verbose, customer_facing, short)
       error = <<~MSG
       Generation of daily report for project *#{project.name}* stopped due to error:
       #{e}
+      #{e.error_messages}
       MSG
 
       project.send_slack_message(error) if slack
@@ -88,6 +89,7 @@ if ARGV[0] && ARGV[0] != "all"
   rescue AzureApiError, AwsSdkError => e
     puts "Generation of daily report for project #{project.name} stopped due to error: "
     puts e
+    puts e.error_messages
   end
 else
   all_projects(date, slack, text, rerun, verbose, customer_facing, short)
