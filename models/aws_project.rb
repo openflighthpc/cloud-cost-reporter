@@ -314,28 +314,33 @@ class AwsProject < Project
 
     # for daily report, only make query if don't already have data in logs or asked to recalculate
     if !compute_cost_log || rerun
-      begin
-        response = @explorer.get_cost_and_usage(compute_cost_query(start_date, end_date)).results_by_time
-      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
-        raise AwsSdkError.new("Unable to determine compute costs for project #{self.name}. #{error if @verbose}") 
-      end
+      groups = self.instance_logs.select(:compute_group).distinct.pluck(:compute_group).compact
+      groups << "compute"
+      groups.each do |group|
+        begin
+          response = @explorer.get_cost_and_usage(compute_cost_query(start_date, end_date, "DAILY", group)).results_by_time
+        rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
+          raise AwsSdkError.new("Unable to determine compute costs for project #{self.name}. #{error if @verbose}") 
+        end
 
-      response.each do |day|
-        date = day[:time_period][:start]
-        compute_cost = day[:total]["UnblendedCost"][:amount].to_f
-        compute_cost_log = self.cost_logs.find_by(date: date, scope: "compute")
-        if rerun && compute_cost_log
-          compute_cost_log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
-          compute_cost_log.save!
-        else
-          compute_cost_log = CostLog.create(
-            project_id: self.id,
-            cost: compute_cost,
-            currency: "USD",
-            date: date,
-            scope: "compute",
-            timestamp: Time.now.to_s
-          )
+        response.each do |day|
+          date = day[:time_period][:start]
+          compute_cost = day[:total]["UnblendedCost"][:amount].to_f
+          log = self.cost_logs.find_by(date: date, scope: group)
+          if rerun && log
+            log.assign_attributes(cost: compute_cost, timestamp: Time.now.to_s)
+            log.save!
+          else
+            log = CostLog.create(
+              project_id: self.id,
+              cost: compute_cost,
+              currency: "USD",
+              date: date,
+              scope: group,
+              timestamp: Time.now.to_s
+            )
+          end
+          compute_cost_log = log if group == "compute"
         end
       end
     end
@@ -668,7 +673,7 @@ class AwsProject < Project
 
   private
 
-  def compute_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY")
+  def compute_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY", group=nil)
     query = {
       time_period: {
         start: start_date.to_s,
@@ -702,6 +707,7 @@ class AwsProject < Project
       },
     }
     query[:filter][:and] << project_filter if filter_level == "tag"
+    query[:filter][:and] << compute_group_filter(group) if group && group != "compute"
     query
   end
 
@@ -903,6 +909,15 @@ class AwsProject < Project
       tags: {
         key: "project",
         values: [self.name]
+      }
+    }
+  end
+
+  def compute_group_filter(group)
+    {
+      tags: {
+        key: "compute_group",
+        values: [group]
       }
     }
   end
