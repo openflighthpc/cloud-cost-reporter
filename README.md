@@ -187,7 +187,7 @@ The application also includes initial versions of the files `aws_instance_detail
 
 If a project has significant gaps in its cost and usage logs, for example due to only recently being added to this application, two helpers are provided to fill these gaps without the need for manually running daily reports for each missing day.
 
-Firstly, `record_cost_logs.rb` can be run, with three required arguments and one optional argument. These are, in order: the project name, start date, end date and rerun (optional). This will query the relevant AWS SDKs / Azure APIs and record cost and usage logs for all days in that date range (inclusive). For example `ruby record_logs.rb project1 2020-01-01 2020-09-30` will record logs for the project named project1 for all days between and including 1st January 2020 to 30th September.
+Firstly, `record_cost_logs.rb` can be run, with three required arguments and one optional argument. These are, in order: the project name, start date, end date and rerun (optional). This will query the relevant AWS SDKs / Azure APIs and record cost and usage logs for all days in that date range (inclusive). For example `ruby record_cost_logs.rb project1 2020-01-01 2020-09-30` will record logs for the project named project1 for all days between and including 1st January 2020 to 30th September.
 
 If the 4th, optional argument `rerun` is not included, this will ignore any dates which already have logs recorded. If it is included, any existing logs will be overwritten with newly retrieved data.
 
@@ -199,7 +199,7 @@ Please note that compute costs are only available for dates after compute tags h
 
 ### Recording instance logs
 
-To record instance logs for today outside of the daily or weekly reports, these can be generated using `ruby record_instance_logs.rb`. This takes two optional, ordered arguments: the name of one project or `all` and `rerun`. If `rerun` is set, any existing instance logs will be replaced. For example `ruby record_instance_logs.rb project1 rerun` would record instance logs for the project named project1, replacing any existing logs already recorded for today.
+To record the latest instance logs outside of the daily or weekly reports, these can be generated using `ruby record_instance_logs.rb`. This takes two optional, ordered arguments: the name of one project or `all` and `rerun`. If `rerun` is set, any existing instance logs will be replaced. For example `ruby record_instance_logs.rb project1 rerun` would record instance logs for the project named project1, replacing any existing logs already recorded for today.
 
 # Contributing
 
