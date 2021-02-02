@@ -35,6 +35,7 @@ def all_projects(rerun)
       error = <<~MSG
       Generation of instance logs for project *#{project.name}* stopped due to error:
       #{e}
+      #{e.error_messages.join}
       MSG
 
       error << "\n#{"_" * 50}"
@@ -58,7 +59,10 @@ if ARGV[0] && ARGV[0] != "all"
   rescue AzureApiError, AwsSdkError => e
     puts "Generation of instance logs for project #{project.name} stopped due to error: "
     puts e
+    puts e.error_messages
+    return
   end
 else
   all_projects(rerun)
 end
+puts "Logs recorded."

@@ -78,6 +78,7 @@ begin
 rescue AzureApiError, AwsSdkError => e
   puts "Generation of logs for project #{project.name} stopped due to error: "
   puts e
+  puts e.error_messages
   return
 end
 puts "Logs recorded."
