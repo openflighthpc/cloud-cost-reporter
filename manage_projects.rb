@@ -53,7 +53,8 @@ def add_or_update_project(action=nil)
     puts "end_date: #{project.end_date}"
     puts "budget: #{project.current_budget}c.u./month"
     puts "regions: #{project.regions.join(", ")}" if project.aws?
-    puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure?
+    puts "filter_level: #{project.filter_level}"
+    puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure? && project.filter_level == "resource groups"
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
     update_attributes(project)
@@ -387,28 +388,40 @@ def add_project
     metadata["client_id"] = get_non_blank("Azure Client Id")
     metadata["subscription_id"] = get_non_blank("Subscription Id")
     metadata["client_secret"] = get_non_blank("Client Secret")
-    resource_groups = []
-    resource_groups << get_non_blank("First resource group name", "Resource group").downcase
-    stop = false
-    while !stop
-      valid = false
-      while !valid
-        print "Additional resource groups (y/n)? "
-        response = gets.chomp.downcase
-        if response == "n"
-          stop = true
-          valid = true
-        elsif response == "y"
-          valid = true
-        else
-          puts "Invalid response. Please try again"
-        end
-      end
-      if !stop
-        resource_groups << get_non_blank("Additional resource group name", "Resource group").downcase
+    while !valid
+      print "Filtering level (resource group/subscription): "
+      response = gets.strip.downcase
+      if ["resource group", "subscription"].include?(response)
+        valid = true
+        metadata["filter_level"] = response
+      else
+        puts "Invalid selection. Please enter resource group or subscription"
       end
     end
-    metadata["resource_groups"] = resource_groups
+    if metadata["filter_level"] == "reousrce group"
+      resource_groups = []
+      resource_groups << get_non_blank("First resource group name", "Resource group").downcase
+      stop = false
+      while !stop
+        valid = false
+        while !valid
+          print "Additional resource groups (y/n)? "
+          response = gets.chomp.downcase
+          if response == "n"
+            stop = true
+            valid = true
+          elsif response == "y"
+            valid = true
+          else
+            puts "Invalid response. Please try again"
+          end
+        end
+        if !stop
+          resource_groups << get_non_blank("Additional resource group name", "Resource group").downcase
+        end
+      end
+      metadata["resource_groups"] = resource_groups
+    end
   end
   attributes[:metadata] = metadata.to_json
   
