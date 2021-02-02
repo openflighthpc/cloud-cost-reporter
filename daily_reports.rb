@@ -36,7 +36,7 @@ def all_projects(date, slack, text, rerun, verbose, customer_facing, short)
       error = <<~MSG
       Generation of daily report for project *#{project.name}* stopped due to error:
       #{e}
-      #{e.error_messages}
+      #{e.error_messages.join("\n")}
       MSG
 
       project.send_slack_message(error) if slack
