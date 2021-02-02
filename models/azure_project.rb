@@ -607,6 +607,7 @@ class AzureProject < Project
       if response
         msg << "Error code #{response.code}.\n#{response if @verbose}\n"
       end
+      error.error_messages.append(msg)
       if attempt < MAX_API_ATTEMPTS
         retry
       else
@@ -653,6 +654,7 @@ class AzureProject < Project
         if response
           msg << "Error code #{response.code}.\n#{response if @verbose}\n"
         end
+        error.error_messages.append(msg)
         retry
       else
         raise error
@@ -697,6 +699,7 @@ class AzureProject < Project
         if response
           msg << "Error code #{response.code}.\n#{response if @verbose}\n"
         end
+        error.error_messages.append(msg)
         retry
       else
         raise error
@@ -755,10 +758,11 @@ class AzureProject < Project
         end
       rescue Net::ReadTimeout
         if attempt < MAX_API_ATTEMPTS
-        msg = "Attempt #{attempt}: Request timed out.\n"
-        if response
-          msg << "Error code #{response.code}.\n#{response if @verbose}\n"
-        end
+          msg = "Attempt #{attempt}: Request timed out.\n"
+          if response
+            msg << "Error code #{response.code}.\n#{response if @verbose}\n"
+          end
+          error.error_messages.append(msg)
           retry
         else
           raise error
@@ -832,6 +836,7 @@ class AzureProject < Project
           if response
             msg << "Error code #{response.code}.\n#{response if @verbose}\n"
           end
+          error.error_messages.append(msg)
           retry
         else
           raise error
