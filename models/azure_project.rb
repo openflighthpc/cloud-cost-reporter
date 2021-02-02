@@ -536,6 +536,8 @@ class AzureProject < Project
       'api-version': '2020-06-01',
     }
     attempt = 0
+    error = AzureApiError.new("Timeout error querying compute nodes for project"\
+                              "#{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
     begin
       attempt += 1
       response = HTTParty.get(
@@ -548,16 +550,22 @@ class AzureProject < Project
       if response.success?
         vms = response['value']
         vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
-      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+      elsif response.code == 504
         raise Net::ReadTimeout
       else
-        raise AzureApiError.new("Error querying compute nodes for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
+        raise AzureApiError.new("Error querying compute nodes for project #{name}."\
+                                "\nError code #{response.code}.\n#{response if @verbose}")
       end
     rescue Net::ReadTimeout
+      msg = "Attempt #{attempt}: Request timed out.\n"
+      if response
+        msg << "Error code #{response.code}.\n#{response if @verbose}\n"
+      end
+      error.error_messages.append(msg)
       if attempt < MAX_API_ATTEMPTS
         retry
       else
-        raise AzureApiError.new("Timeout error querying compute nodes for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+        raise error
       end
     end 
   end
@@ -577,6 +585,8 @@ class AzureProject < Project
       '$filter': "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}' #{resource_groups_conditional}"
     }
     attempt = 0
+    error = AzureApiError.new("Timeout error querying daily cost Azure API for project"\
+                              " #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
     begin
       attempt += 1
       response = HTTParty.get(
@@ -587,16 +597,21 @@ class AzureProject < Project
       )
       if response.success?
         details = response['value']
-      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+      elsif response.code == 504
         raise Net::ReadTimeout
       else
         raise AzureApiError.new("Error querying daily cost Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
       end
     rescue Net::ReadTimeout
+      msg = "Attempt #{attempt}: Request timed out.\n"
+      if response
+        msg << "Error code #{response.code}.\n#{response if @verbose}\n"
+      end
+      error.error_messages.append(msg)
       if attempt < MAX_API_ATTEMPTS
         retry
       else
-        raise AzureApiError.new("Timeout error querying daily cost Azure API for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+        raise error
       end
     end 
   end
@@ -608,6 +623,8 @@ class AzureProject < Project
       '$filter': "resourceType eq 'Microsoft.Compute/virtualMachines'"
     }
     attempt = 0
+    error = AzureApiError.new("Timeout error querying node status Azpire API for project #{name}."\
+                              "All #{MAX_API_ATTEMPTS} attempts timed out.")
     begin
       attempt += 1 
       response = HTTParty.get(
@@ -626,22 +643,29 @@ class AzureProject < Project
             end
           end
         end
-      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+      elsif response.code == 504
         raise Net::ReadTimeout
       else
         raise AzureApiError.new("Error querying node status Azure API for project #{name}.\nError code #{response.code}.\n#{response if @verbose}")
       end
     rescue Net::ReadTimeout
+      msg = "Attempt #{attempt}: Request timed out.\n"
+      if response
+        msg << "Error code #{response.code}.\n#{response if @verbose}\n"
+      end
+      error.error_messages.append(msg)
       if attempt < MAX_API_ATTEMPTS
         retry
       else
-        raise AzureApiError.new("Timeout error querying node status Azure API for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+        raise error
       end
     end
   end
 
   def update_bearer_token
     attempt = 0
+    error = AzureApiError.new("Timeout error obtaining new authorization token for project"\
+                              "#{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
     begin
       attempt += 1
       response = HTTParty.post(
@@ -664,16 +688,21 @@ class AzureProject < Project
         @metadata['bearer_expiry'] = body['expires_on']
         self.metadata = @metadata.to_json
         self.save
-      elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+      elsif response.code == 504
         raise Net::ReadTimeout
       else
         raise AzureApiError.new("Error obtaining new authorization token for project #{name}.\nError code #{response.code}\n#{response if @verbose}")
       end
     rescue Net::ReadTimeout
+      msg = "Attempt #{attempt}: Request timed out.\n"
+      if response
+        msg << "Error code #{response.code}.\n#{response if @verbose}\n"
+      end
+      error.error_messages.append(msg)
       if attempt < MAX_API_ATTEMPTS
         retry
       else
-        raise AzureApiError.new("Timeout error obtaining new authorization token for project #{name}. All #{MAX_API_ATTEMPTS} attempts timed out.")
+        raise error
       end
     end
   end
@@ -701,6 +730,8 @@ class AzureProject < Project
       refresh_auth_token
       uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Commerce/RateCard?api-version=2016-08-31-preview&$filter=OfferDurableId eq 'MS-AZR-0003P' and Currency eq 'GBP' and Locale eq 'en-GB' and RegionInfo eq 'GB'"
       attempt = 0
+      error = AzureApiError.new("Timeout error obtaining latest Azure price list."\
+                                "All #{MAX_API_ATTEMPTS} attempts timed out.")
       begin
         attempt += 1
         response = HTTParty.get(
@@ -720,16 +751,21 @@ class AzureProject < Project
               File.write("azure_prices.txt", "\n", mode: "a")
             end
           end
-        elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+        elsif response.code == 504
           raise Net::ReadTimeout
         else
           raise AzureApiError.new("Error obtaining latest Azure price list. Error code #{response.code}.\n#{response if @verbose}")
         end
       rescue Net::ReadTimeout
+        msg = "Attempt #{attempt}: Request timed out.\n"
+        if response
+          msg << "Error code #{response.code}.\n#{response if @verbose}\n"
+        end
+        error.error_messages.append(msg)
         if attempt < MAX_API_ATTEMPTS
           retry
         else
-          raise AzureApiError.new("Timeout error obtaining latest Azure price list. All #{MAX_API_ATTEMPTS} attempts timed out.")
+          raise error
         end
       end
     end
@@ -754,6 +790,8 @@ class AzureProject < Project
       refresh_auth_token
       uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Compute/skus?api-version=2019-04-01"
       attempt = 0
+      error = AzureApiError.new("Timeout error obtaining latest Azure instance list."\
+                                "All #{MAX_API_ATTEMPTS} attempts timed out.")
       begin
         attempt += 1
         response = HTTParty.get(
@@ -787,16 +825,21 @@ class AzureProject < Project
               File.write("azure_instance_sizes.txt", "\n", mode: "a")
             end
           end
-        elsif response.code == 504 && attempt < MAX_API_ATTEMPTS
+        elsif response.code == 504
           raise Net::ReadTimeout
         else
           raise AzureApiError.new("Error obtaining latest Azure instance list. Error code #{response.code}.\n#{response if @verbose}")
         end
       rescue Net::ReadTimeout
+        msg = "Attempt #{attempt}: Request timed out.\n"
+        if response
+          msg << "Error code #{response.code}.\n#{response if @verbose}\n"
+        end
+        error.error_messages.append(msg)
         if attempt < MAX_API_ATTEMPTS
           retry
         else
-          raise AzureApiError.new("Timeout error obtaining latest Azure instance list. All #{MAX_API_ATTEMPTS} attempts timed out.")
+          raise error
         end
       end
     end
@@ -850,4 +893,9 @@ class AzureProject < Project
 end
 
 class AzureApiError < StandardError
+  attr_accessor :error_messages
+  def initialize(msg)
+    @error_messages = []
+    super(msg)
+  end
 end
