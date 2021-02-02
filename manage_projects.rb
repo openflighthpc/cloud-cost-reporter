@@ -105,7 +105,7 @@ def update_attributes(project)
     else
       value = get_non_blank(attribute)
       project.write_attribute(attribute.to_sym, value)
-      if project.host == "azure" && attribute == "filter_level" &&
+      if project.azure? && attribute == "filter_level" &&
          project.filter_level == "resource group" && !project.resource_groups.any?
         puts "This project has no resource groups - please add at least one."
         update_resource_groups(project)
@@ -383,7 +383,7 @@ def add_project
       response = gets.strip.downcase
       if ["tag", "account"].include?(response)
         valid = true
-        metadata["filter_level"] = response
+        attributes[:filter_level] = response
       else
         puts "Invalid selection. Please enter tag or account"
       end
@@ -399,13 +399,13 @@ def add_project
       response = gets.strip.downcase
       if ["resource group", "subscription"].include?(response)
         valid = true
-        metadata["filter_level"] = response
+        attributes[:filter_level] = response
       else
         puts "Invalid selection. Please enter resource group or subscription"
       end
     end
     resource_groups = []
-    if metadata["filter_level"] == "resource group"
+    if attributes[:filter_level] == "resource group"
       resource_groups << get_non_blank("First resource group name", "Resource group").downcase
       stop = false
       while !stop
@@ -466,7 +466,7 @@ def add_project
     valid = false
     while !valid
       print "Project start date is in the past. Would you like to retrieve and record historic costs (y/n)? "
-      print "This may take a long time (5+ mins per month of data). " if project.host == "azure"
+      print "This may take a long time (5+ mins per month of data). " if project.azure?
       response = gets.chomp.downcase
       if response == "n"
         stop = true
