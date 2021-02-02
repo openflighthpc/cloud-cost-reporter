@@ -33,6 +33,12 @@ class AzureProject < Project
   DEFAULT_TIMEOUT = 180
   @@prices = {}
   @@region_mappings = {}
+  validates :filter_level,
+    presence: true,
+    inclusion: {
+      in: ["resource group", "subscription"],
+      message: "%{value} is not a valid filter level. Must be resource group or subscription."
+    }
 
   after_initialize :construct_metadata
   after_initialize :update_region_mappings

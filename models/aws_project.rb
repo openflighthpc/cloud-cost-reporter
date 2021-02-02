@@ -34,6 +34,12 @@ require_relative 'project'
 class AwsProject < Project
   @@prices = {}
   @@region_mappings = {}
+  validates :filter_level,
+    presence: true,
+    inclusion: {
+      in: %w(tag account),
+      message: "%{value} is not a valid filter level. Must be tag or account."
+    }
   after_initialize :add_sdk_objects
 
   default_scope { where(host: "aws") }

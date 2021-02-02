@@ -105,6 +105,11 @@ def update_attributes(project)
     else
       value = get_non_blank(attribute)
       project.write_attribute(attribute.to_sym, value)
+      if project.host == "azure" && attribute == "filter_level" &&
+         project.filter_level == "resource group" && !project.resource_groups.any?
+        puts "This project has no resource groups - please add at least one."
+        update_resource_groups(project)
+      end
     end
     valid = project.valid?
     while !valid
@@ -388,6 +393,7 @@ def add_project
     metadata["client_id"] = get_non_blank("Azure Client Id")
     metadata["subscription_id"] = get_non_blank("Subscription Id")
     metadata["client_secret"] = get_non_blank("Client Secret")
+    valid = false
     while !valid
       print "Filtering level (resource group/subscription): "
       response = gets.strip.downcase
@@ -398,8 +404,8 @@ def add_project
         puts "Invalid selection. Please enter resource group or subscription"
       end
     end
-    if metadata["filter_level"] == "reousrce group"
-      resource_groups = []
+    resource_groups = []
+    if metadata["filter_level"] == "resource group"
       resource_groups << get_non_blank("First resource group name", "Resource group").downcase
       stop = false
       while !stop
@@ -420,8 +426,8 @@ def add_project
           resource_groups << get_non_blank("Additional resource group name", "Resource group").downcase
         end
       end
-      metadata["resource_groups"] = resource_groups
     end
+    metadata["resource_groups"] = resource_groups
   end
   attributes[:metadata] = metadata.to_json
   
