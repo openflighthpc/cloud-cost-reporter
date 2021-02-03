@@ -24,46 +24,28 @@
 # For more information on cloud-cost-reporter, please visit:
 # https://github.com/openflighthpc/cloud-cost-reporter
 #==============================================================================
-
 require 'sqlite3'
-load './models/project.rb'
+load './models/project_factory.rb'
 
 db = SQLite3::Database.open 'db/cost_tracker.sqlite3'
 
-db.execute "CREATE TABLE IF NOT EXISTS budgets(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id INTEGER,
-  amount INTEGER,
-  effective_at TEXT,
-  timestamp TEXT
-  )"
+db.execute "ALTER TABLE projects
+ADD COLUMN filter_level TEXT;"
 
-if Project.new().respond_to?(:budget)
-  Project.all.each do |project|
-    if project.budgets.length == 0
-      Budget.create({
-        project_id: project.id,
-        amount: project.budget,
-        effective_at: project.start_date,
-        timestamp: Time.now
-      })
-    end
+AzureProject.all.each do |project|
+  if !project.filter_level
+    project.filter_level = "resource group"
+    project.save!
   end
+end
 
-  db.execute "ALTER TABLE projects RENAME TO projects_old;"
-  db.execute "CREATE TABLE projects( 
-      name TEXT,
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id INTEGER,
-      host TEXT,
-      start_date TEXT,
-      end_date TEXT,
-      slack_channel TEXT,
-      metadata TEXT
-    );"
-  db.execute "INSERT INTO projects (name, id, client_id, host, start_date, end_date, slack_channel, metadata)
-    SELECT name, id, client_id, host, start_date, end_date, slack_channel, metadata
-    FROM projects_old;
-    DROP TABLE projects_old;
-    COMMIT;"
+Project.all.each do |project|
+  metadata = JSON.parse(project.metadata)
+  filter = metadata["filter_level"]
+  if filter
+    project.filter_level = filter
+    metadata.delete("filter_level")
+    project.metadata = metadata.to_json
+    project.save!
+  end
 end

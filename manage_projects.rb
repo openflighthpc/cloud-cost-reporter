@@ -53,7 +53,8 @@ def add_or_update_project(action=nil)
     puts "end_date: #{project.end_date}"
     puts "budget: #{project.current_budget}c.u./month"
     puts "regions: #{project.regions.join(", ")}" if project.aws?
-    puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure?
+    puts "filter_level: #{project.filter_level}"
+    puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure? && project.filter_level == "resource groups"
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
     update_attributes(project)
@@ -102,8 +103,16 @@ def update_attributes(project)
       metadata[key] = value
       project.metadata = metadata.to_json
     else
-      value = get_non_blank(attribute)
+      options = nil
+      if attribute == "filter_level"
+        options = project.host == "aws" ? "tag/account" : "resource group/subscription"
+      end
+      value = get_non_blank(attribute, attribute, options)
       project.write_attribute(attribute.to_sym, value)
+      if project.azure? && attribute == "filter_level" && project.filter_level == "resource group" && !project.resource_groups.any?
+        puts "This project has no resource groups - please add at least one."
+        update_resource_groups(project)
+      end
     end
     valid = project.valid?
     while !valid
@@ -377,7 +386,7 @@ def add_project
       response = gets.strip.downcase
       if ["tag", "account"].include?(response)
         valid = true
-        metadata["filter_level"] = response
+        attributes[:filter_level] = response
       else
         puts "Invalid selection. Please enter tag or account"
       end
@@ -387,25 +396,38 @@ def add_project
     metadata["client_id"] = get_non_blank("Azure Client Id")
     metadata["subscription_id"] = get_non_blank("Subscription Id")
     metadata["client_secret"] = get_non_blank("Client Secret")
-    resource_groups = []
-    resource_groups << get_non_blank("First resource group name", "Resource group").downcase
-    stop = false
-    while !stop
-      valid = false
-      while !valid
-        print "Additional resource groups (y/n)? "
-        response = gets.chomp.downcase
-        if response == "n"
-          stop = true
-          valid = true
-        elsif response == "y"
-          valid = true
-        else
-          puts "Invalid response. Please try again"
-        end
+    valid = false
+    while !valid
+      print "Filtering level (resource group/subscription): "
+      response = gets.strip.downcase
+      if ["resource group", "subscription"].include?(response)
+        valid = true
+        attributes[:filter_level] = response
+      else
+        puts "Invalid selection. Please enter resource group or subscription"
       end
-      if !stop
-        resource_groups << get_non_blank("Additional resource group name", "Resource group").downcase
+    end
+    resource_groups = []
+    if attributes[:filter_level] == "resource group"
+      resource_groups << get_non_blank("First resource group name", "Resource group").downcase
+      stop = false
+      while !stop
+        valid = false
+        while !valid
+          print "Additional resource groups (y/n)? "
+          response = gets.chomp.downcase
+          if response == "n"
+            stop = true
+            valid = true
+          elsif response == "y"
+            valid = true
+          else
+            puts "Invalid response. Please try again"
+          end
+        end
+        if !stop
+          resource_groups << get_non_blank("Additional resource group name", "Resource group").downcase
+        end
       end
     end
     metadata["resource_groups"] = resource_groups
@@ -447,7 +469,7 @@ def add_project
     valid = false
     while !valid
       print "Project start date is in the past. Would you like to retrieve and record historic costs (y/n)? "
-      print "This may take a long time (5+ mins per month of data). " if project.host == "azure"
+      print "This may take a long time (5+ mins per month of data). " if project.azure?
       response = gets.chomp.downcase
       if response == "n"
         stop = true
@@ -503,10 +525,12 @@ def add_budget(project)
   puts "Budget created"
 end
 
-def get_non_blank(text, attribute=text)
+def get_non_blank(text, attribute=text, options=nil)
   valid = false
   while !valid
-    print "#{text}: "
+    print "#{text}"
+    print "(#{options})" if options
+    print ": "
     response = gets.strip
     if response.empty?
       puts "#{attribute} must not be blank"

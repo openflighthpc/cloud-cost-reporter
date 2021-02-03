@@ -45,9 +45,9 @@ This application makes use of a number of AWS sdks, which require a valid `Acces
 
 ### Azure
 
-In this application, Azure projects are assumed to be confined to a single Azure resource group (to be specified at project creation). In addition, it is required that compute nodes be given the `"type" => "compute"` tag on the Azure platform and core infrastructure given the `"type" => "core"` tag. If compute groups are being used, compute nodes must also be identified with the tag `"compute_group" => "groupname"`.
+In this application, Azure projects are tracked either by a subscription, or by one or more resource groups (that must be part of the same subscription). In addition, it is required that compute nodes be given the `"type" => "compute"` tag on the Azure platform and core infrastructure given the `"type" => "core"` tag. If compute groups are being used, compute nodes must also be identified with the tag `"compute_group" => "groupname"`.
 
-The point at which tags are added does not affect the data pulled from the Azure API. As long as the resources that you want to analyse have the tag, the detail objects associated with that resource will be queried.
+Tags are available in the Azure instances API after a few minutes, but will only be reflected in costs for dates/times after the tags have been added.
 
 In order to run the application, an app and service principal must be created in Azure Active Directory (see https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal for more details). The app must have at least `Reader` level permissions given to it in the subscription you wish to use it in, via the `Access control (IAM)` blade.
 
@@ -57,7 +57,7 @@ Azure projects require the following details to be obtained prior to project cre
 - Client (application) ID
 - Client secret
 - Subscription ID
-- Resource group name(s)
+- Resource group name(s), if the project is set at resource group level
 
 The first three can be obtained via the app you created in Azure Active Directory. The subscription ID is located in the overview for the subscription containing the project; as is the resource group name in the overview for the resource group. A project may have more than one resource group, but these must be part of the same subscription.
 

@@ -48,6 +48,7 @@ class Project < ActiveRecord::Base
   validates :name, presence: true, uniqueness: true
   validates :slack_channel, presence: true
   validates :start_date, presence: true
+  validates :filter_level, presence: true
   validate :start_date_valid, on: [:update, :create]
   validate :end_date_valid, on: [:update, :create], if: -> { end_date != nil }
   validate :end_date_after_start, on: [:update, :create], if: -> { end_date != nil }

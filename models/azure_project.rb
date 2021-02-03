@@ -33,6 +33,12 @@ class AzureProject < Project
   DEFAULT_TIMEOUT = 180
   @@prices = {}
   @@region_mappings = {}
+  validates :filter_level,
+    presence: true,
+    inclusion: {
+      in: ["resource group", "subscription"],
+      message: "%{value} is not a valid filter level. Must be resource group or subscription."
+    }
 
   after_initialize :construct_metadata
   after_initialize :update_region_mappings
@@ -68,11 +74,11 @@ class AzureProject < Project
   end
 
   def resource_groups
-    @metadata['resource_groups']
+    @metadata['resource_groups'] if self.filter_level == 'resource group'
   end
 
   def describe_resource_groups
-    resource_groups.join(", ")
+    resource_groups.join(", ") if self.filter_level == 'resource group'
   end
 
   def validate_credentials
@@ -425,8 +431,8 @@ class AzureProject < Project
             date: date.to_s,
             timestamp: Time.now.to_s
           )
-          compute_cost_log = log if key == :total
         end
+        compute_cost_log = log if key == :total
       end
     end
     compute_cost_log
@@ -550,7 +556,8 @@ class AzureProject < Project
 
       if response.success?
         vms = response['value']
-        vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && self.resource_groups.include?(vm['id'].split('/')[4].downcase) }
+        vms.select { |vm| vm.key?('tags') && vm['tags']['type'] == 'compute' && (filter_level == "subscription" ||
+        (filter_level == "resource group" && self.resource_groups.include?(vm['id'].split('/')[4].downcase))) }
       elsif response.code == 504
         raise Net::ReadTimeout
       else
@@ -573,17 +580,21 @@ class AzureProject < Project
 
   def api_query_cost(start_date, end_date=start_date)
     resource_groups_conditional = ""
-    self.resource_groups.each_with_index do |group, index|
-      if index == 0 
-        resource_groups_conditional << "and properties/resourceGroup eq '#{group}'"
-      else
-        resource_groups_conditional << " or properties/resourceGroup eq '#{group}'"
+    if filter_level == "resource group"
+      self.resource_groups.each_with_index do |group, index|
+        if index == 0 
+          resource_groups_conditional << "and properties/resourceGroup eq '#{group}'"
+        else
+          resource_groups_conditional << " or properties/resourceGroup eq '#{group}'"
+        end
       end
     end
+    filter = "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}'"
+    filter << " #{resource_groups_conditional}" if filter_level == "resource group"
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails"
     query = {
       'api-version': '2019-10-01',
-      '$filter': "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}' #{resource_groups_conditional}"
+      '$filter': filter
     }
     attempt = 0
     error = AzureApiError.new("Timeout error querying daily cost Azure API for project"\
@@ -638,7 +649,7 @@ class AzureProject < Project
         nodes = response['value']
         nodes.select do |node|
           r_group = node['id'].split('/')[4].downcase
-          if self.resource_groups.include?(r_group)
+          if filter_level == "subscription" || (filter_level == "resource group" && self.resource_groups.include?(r_group))
             today_compute_nodes.any? do |cn|
               node['id'].match(/virtualMachines\/(.*)\/providers/i)[1] == cn['name']
             end
