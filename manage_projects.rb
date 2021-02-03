@@ -103,10 +103,13 @@ def update_attributes(project)
       metadata[key] = value
       project.metadata = metadata.to_json
     else
-      value = get_non_blank(attribute)
+      options = nil
+      if attribute == "filter_level"
+        options = project.host == "aws" ? "tag/account" : "resource group/subscription"
+      end
+      value = get_non_blank(attribute, attribute, options)
       project.write_attribute(attribute.to_sym, value)
-      if project.azure? && attribute == "filter_level" &&
-         project.filter_level == "resource group" && !project.resource_groups.any?
+      if project.azure? && attribute == "filter_level" && project.filter_level == "resource group" && !project.resource_groups.any?
         puts "This project has no resource groups - please add at least one."
         update_resource_groups(project)
       end
@@ -522,10 +525,12 @@ def add_budget(project)
   puts "Budget created"
 end
 
-def get_non_blank(text, attribute=text)
+def get_non_blank(text, attribute=text, options=nil)
   valid = false
   while !valid
-    print "#{text}: "
+    print "#{text}"
+    print "(#{options})" if options
+    print ": "
     response = gets.strip
     if response.empty?
       puts "#{attribute} must not be blank"

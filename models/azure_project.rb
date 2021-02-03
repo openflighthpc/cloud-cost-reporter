@@ -74,11 +74,11 @@ class AzureProject < Project
   end
 
   def resource_groups
-    @metadata['resource_groups']
+    @metadata['resource_groups'] if self.filter_level == 'resource group'
   end
 
   def describe_resource_groups
-    resource_groups.join(", ")
+    resource_groups.join(", ") if self.filter_level == 'resource group'
   end
 
   def validate_credentials
