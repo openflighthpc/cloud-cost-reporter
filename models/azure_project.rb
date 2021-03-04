@@ -311,16 +311,21 @@ class AzureProject < Project
     if !today_logs.any?
       active_nodes = api_query_active_nodes
       active_nodes&.each do |node|
+        # Azure API returns ids with inconsistent capitalisations so need to edit them here
+        instance_id = node['id']
+        instance_id.gsub!("resourcegroups", "resourceGroups")
+        instance_id.gsub!("microsoft.compute/virtualmachines", "Microsoft.Compute/virtualMachines")
         name = node['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
+        resource_group = node['id'].split("/")[2].downcase
         region = node['location']
         cnode = today_compute_nodes.detect do |compute_node|
-                  compute_node['name'] == name
+                  compute_node['name'] == name  && resource_group == compute_node['id'].split("/")[2].downcase
                 end
         type = cnode['properties']['hardwareProfile']['vmSize']
         compute = cnode.key?('tags') && cnode['tags']['type'] == 'compute'
         compute_group = cnode.key?('tags') ? cnode['tags']['compute_group'] : nil
         InstanceLog.create(
-          instance_id: node['id'],
+          instance_id: instance_id,
           project_id: id,
           instance_type: type,
           instance_name: name,
