@@ -316,10 +316,10 @@ class AzureProject < Project
         instance_id.gsub!("resourcegroups", "resourceGroups")
         instance_id.gsub!("microsoft.compute/virtualmachines", "Microsoft.Compute/virtualMachines")
         name = node['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
-        resource_group = node['id'].split("/")[2].downcase
+        resource_group = node['id'].split("/")[4].downcase
         region = node['location']
         cnode = today_compute_nodes.detect do |compute_node|
-                  compute_node['name'] == name  && resource_group == compute_node['id'].split("/")[2].downcase
+                  compute_node['name'] == name  && resource_group == compute_node['id'].split("/")[4].downcase
                 end
         type = cnode['properties']['hardwareProfile']['vmSize']
         compute = cnode.key?('tags') && cnode['tags']['type'] == 'compute'
