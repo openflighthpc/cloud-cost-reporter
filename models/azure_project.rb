@@ -614,6 +614,12 @@ class AzureProject < Project
       )
       if response.success?
         details = response['value']
+        # Sometimes Azure will duplicate each cost item. We know the dupes are in sequential pairs
+        # so if this the case, only include the first copy of each.
+        if details.length > 1 && details[0]["id"] == details[1]["id"]
+          filtered_details = details.select.with_index { |cost, index| index % 2 == 0 } 
+        end
+        filtered_details ? filtered_details : details
       elsif response.code == 504
         raise Net::ReadTimeout
       else
