@@ -616,9 +616,16 @@ class AzureProject < Project
         details = response['value']
         # Sometimes Azure will duplicate each cost item. We know there are exactly two of each in this situation
         # so can sort so sequential and then remove every other item
-        if details.length > 1 && details.count { |cost| cost["id"] == details[0]["id"] } > 1
-          details.sort_by! { |cost| cost["id"] }
-          filtered_details = details.select.with_index { |cost, index| index % 2 == 0 } 
+        if details.length > 1
+          dupe_count = 0
+          details.each do |cost|
+            break if dupe_count > 1
+            dupe_count += 1 if cost["id"] == details[0]["id"]
+          end
+          if dupe_count > 1
+            details.sort_by! { |cost| cost["id"] }
+            filtered_details = details.select.with_index { |cost, index| index % 2 == 0 } 
+          end
         end
         filtered_details ? filtered_details : details
       elsif response.code == 504
