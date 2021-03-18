@@ -449,8 +449,8 @@ class AzureProject < Project
     if !core_cost_log || rerun
       core_costs = cost_entries.select do |cost|
         cost["tags"] && cost["tags"]["type"] == "core" &&
-        cost["meterDetails"]["meterName"] != "Data Transfer Out" && 
-        !cost["meterDetails"]["meterName"].include?("Disks")
+        cost["properties"]["meterDetails"]["meterName"] != "Data Transfer Out" && 
+        !cost["properties"]["meterDetails"]["meterName"].include?("Disks")
       end  
       core_cost = begin
                       core_costs.map { |c| c['properties']['cost'] }.reduce(:+)
