@@ -35,7 +35,7 @@ class CostLog < ActiveRecord::Base
 
   def compute_cost
     gbp_cost = self.currency == "USD" ? (self.cost.to_f * USD_GBP_CONVERSION) : self.cost.to_f
-    (gbp_cost * 10).ceil
+    (gbp_cost * 12.5).ceil
   end
 
   def risk_cost
