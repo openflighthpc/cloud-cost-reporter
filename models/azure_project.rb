@@ -143,6 +143,7 @@ class AzureProject < Project
       data_out_cost_log, data_out_amount_log = get_data_out_figures(response, date, rerun)
       compute_cost_log = get_compute_costs(response, date, rerun)
       core_cost_log = get_core_costs(response, date, rerun)
+      storage_cost_log = get_storage_costs(response, date, rerun)
     end
 
     overall_usage = get_overall_usage(date, customer_facing)
@@ -198,10 +199,7 @@ class AzureProject < Project
       total_costs ||= 0.0
       total_costs = (total_costs * 10 * 1.25).ceil
 
-      data_out_costs = costs_this_month.select do |cost|
-        cost['properties']["additionalInfo"] &&
-        JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut")
-      end
+      data_out_costs = costs_this_month.select { |cost| cost["properties"]["meterDetails"]["meterName"] == "Data Transfer Out" }
 
       data_out_cost = 0.0
       data_out_amount = 0.0
@@ -211,8 +209,10 @@ class AzureProject < Project
       end
       data_out_cost = (data_out_cost * 10 * 1.25).ceil
 
-      compute_nodes = self.instance_logs.where(compute: 1).where('timestamp LIKE ?', "%#{start_date.to_s[0..6]}%")
-      compute_costs_this_month = costs_this_month.select { |cd| compute_nodes.any? { |node| node.instance_name == cd['properties']['resourceName'] } }
+      compute_costs_this_month = costs_this_month.select do |cost|
+        cost["tags"] && cost["tags"]["type"] == "compute" &&
+        cost["properties"]["meterDetails"]["meterCategory"] == "Virtual Machines"
+      end
       compute_costs = begin
                      compute_costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
                    rescue NoMethodError
@@ -405,8 +405,7 @@ class AzureProject < Project
     if !compute_cost_log || rerun
       compute_costs = cost_entries.select do |cost|
         cost["tags"] && cost["tags"]["type"] == "compute" &&
-        cost['properties']["additionalInfo"] &&
-        JSON.parse(cost["properties"]["additionalInfo"])["UsageType"] == "ComputeHR"
+        cost["properties"]["meterDetails"]["meterCategory"] == "Virtual Machines"
       end
 
       cost_breakdown = {total: 0.0}
@@ -443,15 +442,15 @@ class AzureProject < Project
     compute_cost_log
   end
 
-  # This includes any resources tagged as core, including storage. Does not include data out costs.
+  # This includes any resources tagged as core. Does not include disk or data out costs.
   def get_core_costs(cost_entries, date, rerun)
     core_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "core")
 
     if !core_cost_log || rerun
       core_costs = cost_entries.select do |cost|
         cost["tags"] && cost["tags"]["type"] == "core" &&
-        !(cost['properties']["additionalInfo"] &&
-        JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut"))
+        cost["properties"]["meterDetails"]["meterName"] != "Data Transfer Out" && 
+        !cost["properties"]["meterDetails"]["meterName"].include?("Disks")
       end  
       core_cost = begin
                       core_costs.map { |c| c['properties']['cost'] }.reduce(:+)
@@ -482,10 +481,7 @@ class AzureProject < Project
     data_out_figures = nil
     # only calculate if don't already have data in logs, or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
-      data_out_costs = cost_entries.select do |cost|
-        cost['properties']["additionalInfo"] &&
-        JSON.parse(cost["properties"]["additionalInfo"])["UsageResourceKind"]&.include?("DataTrOut")
-      end
+      data_out_costs = cost_entries.select { |cost| cost["properties"]["meterDetails"]["meterName"] == "Data Transfer Out" }
 
       data_out_cost = 0.0
       data_out_amount = 0.0
@@ -527,6 +523,34 @@ class AzureProject < Project
     return data_out_cost_log, data_out_amount_log
   end
 
+  def get_storage_costs(cost_entries, date, rerun)
+    storage_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "storage")
+
+    if !storage_cost_log || rerun
+      storage_costs = cost_entries.select { |cost| cost["properties"]["meterDetails"]["meterName"].include?("Disks") }
+      storage_cost = begin
+                      storage_costs.map { |c| c['properties']['cost'] }.reduce(:+)
+                     rescue NoMethodError
+                      0.0
+                     end
+      storage_cost ||= 0.0
+      if rerun && storage_cost_log
+        storage_cost_log.assign_attributes(cost: storage_cost, timestamp: Time.now.to_s)
+        storage_cost_log.save!
+      else
+        storage_cost_log = CostLog.create(
+          project_id: id,
+          cost: storage_cost,
+          currency: 'GBP',
+          scope: 'storage',
+          date: date.to_s,
+          timestamp: Time.now.to_s
+        )
+      end
+    end
+    storage_cost_log
+  end
+
   def record_logs_for_range(start_date, end_date, rerun=false)
     update_bearer_token
     record_instance_logs # need some instance logs in order to determine compute costs
@@ -538,6 +562,7 @@ class AzureProject < Project
         get_compute_costs(response, date, rerun)
         get_data_out_figures(response, date, rerun)
         get_core_costs(response, date, rerun)
+        get_storage_costs(response, date, rerun)
       end
     end
   end
@@ -596,7 +621,7 @@ class AzureProject < Project
     end
     filter = "properties/usageStart ge '#{start_date.to_s}' and properties/usageEnd le '#{end_date.to_s}'"
     filter << " #{resource_groups_conditional}" if filter_level == "resource group"
-    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails"
+    uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails?$expand=meterDetails"
     query = {
       'api-version': '2019-10-01',
       '$filter': filter

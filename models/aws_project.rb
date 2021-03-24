@@ -144,6 +144,7 @@ class AwsProject < Project
     compute_cost_log = get_compute_costs(date, date + 1.day, rerun)
     core_cost_log = get_core_costs(date, date + 1.day, rerun)
     data_out_cost_log, data_out_amount_log = get_data_out_figures(date, date + 1.day, rerun)
+    storage_cost_log = get_storage_costs(date, date + 1.day, rerun)
     total_cost_log = get_total_costs(date, date + 1.day, rerun)
     overall_usage = get_overall_usage(date, customer_facing)
     usage_breakdown = get_usage_hours_by_instance_type(date, rerun, customer_facing)
@@ -442,6 +443,42 @@ class AwsProject < Project
     return data_out_cost_log, data_out_amount_log
   end
 
+  def get_storage_costs(start_date, end_date, rerun)
+    storage_cost_log = nil
+    if end_date == start_date + 1.day
+      storage_cost_log = self.cost_logs.find_by(date: start_date.to_s, scope: "storage")
+    end
+
+    # for daily report, only make query if don't already have data in logs or asked to recalculate
+    if !storage_cost_log || rerun
+      begin
+        response = @explorer.get_cost_and_usage(storage_cost_query(start_date, end_date)).results_by_time
+      rescue Aws::CostExplorer::Errors::ServiceError, Seahorse::Client::NetworkingError => error
+        raise AwsSdkError.new("Unable to determine storage costs for project #{self.name}. #{error if @verbose}") 
+      end
+
+      response.each do |day|
+        date = day[:time_period][:start]
+        storage_cost = day[:total]["UnblendedCost"][:amount].to_f
+        storage_cost_log = self.cost_logs.find_by(date: date, scope: "storage")
+        if rerun && storage_cost_log
+          storage_cost_log.assign_attributes(cost: storage_cost, timestamp: Time.now.to_s)
+          storage_cost_log.save!
+        else
+          storage_cost_log = CostLog.create(
+            project_id: self.id,
+            cost: storage_cost,
+            currency: "USD",
+            date: date,
+            scope: "storage",
+            timestamp: Time.now.to_s
+          )
+        end
+      end
+    end
+    storage_cost_log
+  end
+
   def get_total_costs(start_date, end_date, rerun)
     total_cost_log = nil
     if end_date == start_date + 1.day
@@ -617,6 +654,7 @@ class AwsProject < Project
     get_compute_costs(start_date, end_date, rerun)
     get_core_costs(start_date, end_date, rerun)
     get_data_out_figures(start_date, end_date, rerun)
+    get_storage_costs(start_date, end_date, rerun)
     get_total_costs(start_date, end_date, rerun)
     get_usage_hours(start_date, end_date, rerun)
   end
@@ -695,6 +733,12 @@ class AwsProject < Project
           },
           {
             dimensions: {
+              key: "USAGE_TYPE_GROUP",
+              values: ["EC2: Running Hours"]
+            }
+          },
+          {
+            dimensions: {
               key: "SERVICE",
               values: ["Amazon Elastic Compute Cloud - Compute"]
             }
@@ -723,6 +767,12 @@ class AwsProject < Project
       metrics: ["UNBLENDED_COST"],
       filter: {
         and:[ 
+          {
+            not: data_out_filter
+          },
+          {
+            not: storage_filter
+          },
           {
             not: {
               dimensions: {
@@ -823,17 +873,41 @@ class AwsProject < Project
       metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
       filter: {
         and: [
+          data_out_filter,
           {
-            dimensions: {
-            key: "USAGE_TYPE_GROUP",
-            values: 
-              [
-                "EC2: Data Transfer - Internet (Out)",
-                "EC2: Data Transfer - CloudFront (Out)",
-                "EC2: Data Transfer - Region to Region (Out)"
-              ]
+            not: {
+              dimensions: {
+                key: "RECORD_TYPE",
+                values: ["CREDIT"]
+              }
             }
           },
+          {
+            not: {
+              dimensions: {
+                key: "SERVICE",
+                values: ["Tax"]
+              }
+            }
+          }
+        ]
+      }
+    }
+    query[:filter][:and] << project_filter if filter_level == "tag"
+    query
+  end
+
+  def storage_cost_query(start_date, end_date=start_date+1, granularity="DAILY")
+    query = {
+      time_period: {
+        start: start_date.to_s,
+        end: end_date.to_s
+      },
+      granularity: granularity,
+      metrics: ["UNBLENDED_COST", "USAGE_QUANTITY"],
+      filter: {
+        and: [
+          storage_filter,
           {
             not: {
               dimensions: {
@@ -920,6 +994,39 @@ class AwsProject < Project
       tags: {
         key: "compute_group",
         values: [group]
+      }
+    }
+  end
+
+  def data_out_filter
+    {
+      dimensions: {
+        key: "USAGE_TYPE_GROUP",
+        values: 
+          [
+            "EC2: Data Transfer - Internet (Out)",
+            "EC2: Data Transfer - CloudFront (Out)",
+            "EC2: Data Transfer - Region to Region (Out)"
+          ]
+      }
+    }
+  end
+
+  def storage_filter
+    { 
+      dimensions: {
+        key: "USAGE_TYPE_GROUP",
+        values: 
+          [
+            "S3: Storage - Standard",
+            "EC2: EBS - I/O Requests",
+            "EC2: EBS - Magnetic",
+            "EC2: EBS - Provisioned IOPS",
+            "EC2: EBS - SSD(gp2)",
+            "EC2: EBS - SSD(io1)",
+            "EC2: EBS - Snapshots",
+            "EC2: EBS - Optimized"
+          ]
       }
     }
   end
