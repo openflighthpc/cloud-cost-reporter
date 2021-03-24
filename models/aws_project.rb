@@ -198,16 +198,16 @@ class AwsProject < Project
       start_date = start_date > date.beginning_of_month ? start_date : date.beginning_of_month
       compute_costs_this_month = @explorer.get_cost_and_usage(compute_cost_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
       compute_costs = compute_costs_this_month.total["UnblendedCost"][:amount].to_f
-      compute_costs = (compute_costs * CostLog::USD_GBP_CONVERSION * 10 * 1.25).ceil
+      compute_costs = (compute_costs * CostLog::USD_GBP_CONVERSION * 12.5 * 1.25).ceil
 
       data_egress_this_month = @explorer.get_cost_and_usage(data_out_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
       data_egress_amount = data_egress_this_month.total["UsageQuantity"][:amount].to_f.ceil(2)
       data_egress_costs = data_egress_this_month.total["UnblendedCost"][:amount].to_f
-      data_egress_costs = (data_egress_costs * CostLog::USD_GBP_CONVERSION * 10 * 1.25).ceil
+      data_egress_costs = (data_egress_costs * CostLog::USD_GBP_CONVERSION * 12.5 * 1.25).ceil
 
       costs_this_month = @explorer.get_cost_and_usage(all_costs_query(start_date, date + 1, "MONTHLY")).results_by_time[0]
       total_costs = costs_this_month.total["UnblendedCost"][:amount].to_f
-      total_costs = (total_costs * CostLog::USD_GBP_CONVERSION * 10 * 1.25).ceil
+      total_costs = (total_costs * CostLog::USD_GBP_CONVERSION * 12.5 * 1.25).ceil
 
       latest_logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)
       instances_date = latest_logs.first ? Time.parse(latest_logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
@@ -222,7 +222,7 @@ class AwsProject < Project
           end
         end
       end
-      inbetween_costs = (inbetween_costs * CostLog::USD_GBP_CONVERSION * 24 * 10 * 1.25).ceil
+      inbetween_costs = (inbetween_costs * CostLog::USD_GBP_CONVERSION * 24 * 12.5 * 1.25).ceil
       inbetween_costs = (inbetween_costs + (fixed_daily_cu_cost * inbetween_dates.count)).ceil
 
       future_costs = 0.0
@@ -231,7 +231,7 @@ class AwsProject < Project
           future_costs += @@prices[log.region][log.instance_type]
         end
       end
-      daily_future_cu = (future_costs * CostLog::USD_GBP_CONVERSION * 24 * 10 * 1.25).ceil
+      daily_future_cu = (future_costs * CostLog::USD_GBP_CONVERSION * 24 * 12.5 * 1.25).ceil
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
       remaining_budget = self.current_budget.to_i - total_costs

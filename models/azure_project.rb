@@ -197,7 +197,7 @@ class AzureProject < Project
                      0.0
                    end
       total_costs ||= 0.0
-      total_costs = (total_costs * 10 * 1.25).ceil
+      total_costs = (total_costs * 12.5 * 1.25).ceil
 
       data_out_costs = costs_this_month.select { |cost| cost["properties"]["meterDetails"]["meterName"] == "Data Transfer Out" }
 
@@ -207,7 +207,7 @@ class AzureProject < Project
         data_out_cost += cost['properties']['cost']
         data_out_amount += cost['properties']['quantity']
       end
-      data_out_cost = (data_out_cost * 10 * 1.25).ceil
+      data_out_cost = (data_out_cost * 12.5 * 1.25).ceil
 
       compute_costs_this_month = costs_this_month.select do |cost|
         cost["tags"] && cost["tags"]["type"] == "compute" &&
@@ -219,7 +219,7 @@ class AzureProject < Project
                      0.0
                    end
       compute_costs ||= 0.0
-      compute_costs = (compute_costs * 10 * 1.25).ceil
+      compute_costs = (compute_costs * 12.5 * 1.25).ceil
 
       latest_logs = self.instance_logs.where('timestamp LIKE ?', "%#{date == DEFAULT_DATE ? Date.today : date}%").where(compute: 1)
       instances_date = latest_logs.first ? Time.parse(latest_logs.first.timestamp) : (date == DEFAULT_DATE ? Time.now : date + 0.5)
@@ -235,7 +235,7 @@ class AzureProject < Project
           end
         end
       end
-      inbetween_costs = (inbetween_costs * 24 * 10 * 1.25).ceil
+      inbetween_costs = (inbetween_costs * 24 * 12.5 * 1.25).ceil
       inbetween_costs = (inbetween_costs + (fixed_daily_cu_cost * inbetween_dates.count)).ceil
 
       future_costs = 0.0
@@ -245,7 +245,7 @@ class AzureProject < Project
           future_costs += @@prices[@@region_mappings[log.region]][type][0]
         end
       end
-      daily_future_cu = (future_costs * 24 * 10 * 1.25).ceil
+      daily_future_cu = (future_costs * 24 * 12.5 * 1.25).ceil
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
       remaining_budget = current_budget.to_i - total_costs
