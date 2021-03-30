@@ -34,6 +34,9 @@ AzureProject.all.each do |project|
     id = log.instance_id
     id.gsub!("resourcegroups", "resourceGroups")
     id.gsub!("microsoft.compute/virtualmachines", "Microsoft.Compute/virtualMachines")
+    id_breakdown = id.split("/")
+    id_breakdown[4] = id_breakdown[4].downcase
+    id = id_breakdown.join("/")
     log.instance_id = id
     log.save!
   end

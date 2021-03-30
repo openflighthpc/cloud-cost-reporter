@@ -315,8 +315,12 @@ class AzureProject < Project
         instance_id = node['id']
         instance_id.gsub!("resourcegroups", "resourceGroups")
         instance_id.gsub!("microsoft.compute/virtualmachines", "Microsoft.Compute/virtualMachines")
+        instance_id_breakdown = instance_id.split("/")
+        resource_group = instance_id_breakdown[4].downcase # sometimes Azure gives it uppercase, sometime lowercase
+        instance_id_breakdown[4] = resource_group
+        instance_id = instance_id_breakdown.join("/")
+ 
         name = node['id'].match(/virtualMachines\/(.*)\/providers/i)[1]
-        resource_group = node['id'].split("/")[4].downcase
         region = node['location']
         cnode = today_compute_nodes.detect do |compute_node|
                   compute_node['name'] == name  && resource_group == compute_node['id'].split("/")[4].downcase
