@@ -28,7 +28,7 @@
 require 'active_record'
 require_relative 'instance_mapping'
 
-ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
+ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3',  timeout: 3000)
 
 class InstanceLog < ActiveRecord::Base
   belongs_to :project

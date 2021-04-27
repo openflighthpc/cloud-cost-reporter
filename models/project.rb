@@ -33,7 +33,7 @@ require_relative 'instance_log'
 require_relative 'usage_log'
 require_relative 'budget'
 
-ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3')
+ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_tracker.sqlite3',  timeout: 3000)
 
 class Project < ActiveRecord::Base
   FIXED_MONTHLY_CU_COST = 5000
