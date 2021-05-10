@@ -55,6 +55,7 @@ def add_or_update_project(action=nil)
     puts "regions: #{project.regions.join(", ")}" if project.aws?
     puts "filter_level: #{project.filter_level}"
     puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure? && project.filter_level == "resource group"
+    puts "project_tag: #{project.project_tag}" if project.aws?
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
     update_attributes(project)
@@ -64,7 +65,8 @@ def add_or_update_project(action=nil)
     formatter = NoMethodMissingFormatter.new
     tp ProjectFactory.new().all_projects_as_type, :id, :name, :host, :current_budget, :start_date, :end_date,
     :slack_channel, {regions: {:display_method => :describe_regions, formatters: [formatter]}},
-    {resource_groups: {:display_method => :describe_resource_groups, formatters: [formatter]}}, {filter_level: {formatters: [formatter]}}
+    {resource_groups: {:display_method => :describe_resource_groups, formatters: [formatter]}}, {filter_level: {formatters: [formatter]}},
+    {project_tag: {formatters: [formatter]}}
     puts
     add_or_update_project
   else
@@ -112,6 +114,10 @@ def update_attributes(project)
       if project.azure? && attribute == "filter_level" && project.filter_level == "resource group" && !project.resource_groups.any?
         puts "This project has no resource groups - please add at least one."
         update_resource_groups(project)
+      end
+      if project.aws? && attribute == "filter_level" && project.filter_level == "tag" && !project.project_tag
+        value = get_non_blank("Project tag", "Project tag")
+        project.write_attribute(:project_tag, value)
       end
     end
     valid = project.valid?
@@ -390,6 +396,9 @@ def add_project
       else
         puts "Invalid selection. Please enter tag or account"
       end
+    end
+    if attributes[:filter_level] == "tag"
+      attributes[:project_tag] = get_non_blank("Project tag", "Project tag")
     end
   else
     metadata["tenant_id"] = get_non_blank("Tenant Id")
