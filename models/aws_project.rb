@@ -978,7 +978,7 @@ class AwsProject < Project
         filters: [
           {
             name: "tag:project", 
-            values: [self.name], 
+            values: [self.project_tag], 
           }, 
         ], 
       }
@@ -989,7 +989,7 @@ class AwsProject < Project
     {
       tags: {
         key: "project",
-        values: [self.name]
+        values: [self.project_tag]
       }
     }
   end
