@@ -54,7 +54,7 @@ def add_or_update_project(action=nil)
     puts "budget: #{project.current_budget}c.u./month"
     puts "regions: #{project.regions.join(", ")}" if project.aws?
     puts "filter_level: #{project.filter_level}"
-    puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure? && project.filter_level == "resource groups"
+    puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure? && project.filter_level == "resource group"
     puts "slack_channel: #{project.slack_channel}"
     puts "metadata: (hidden)\n"
     update_attributes(project)
