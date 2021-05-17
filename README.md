@@ -35,7 +35,7 @@ It is recommended to check that all expected resources (IPs, volumes, etc/) have
 
 ##### Node type specificity
 
-This application includes in its breakdown details of instances specifically used as compute nodes. For this to be measured accurately, the appropriate instances should have a tag added with the key `compute` and the value `true`. Again, these should be added at the point of creation. If compute groups are also being used, these should be added using the tag `compute_group`, with a value of the group name. Similarly, core infrastructure can be identified using a tag with the key `core` and the value `true`.
+This application includes in its breakdown details of instances specifically used as compute nodes. For this to be measured accurately, the appropriate instances should have a tag added with the key `type` and the value `compute`. Again, these should be added at the point of creation. If compute groups are also being used, these should be added using the tag `compute_group`, with a value of the group name. Similarly, core infrastructure can be identified using a tag with the key `type` and the value `core`.
 
 ##### Admin
 
