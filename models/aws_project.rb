@@ -618,8 +618,8 @@ class AwsProject < Project
               if tag.key == "Name"
                 named = tag.value
               end
-              if tag.key == "compute"
-                compute = tag.value == "true"
+              if tag.key == "type"
+                compute = tag.value == "compute"
               end
               if tag.key == "compute_group"
                 compute_group = tag.value
@@ -745,8 +745,8 @@ class AwsProject < Project
           },
           {
             tags: {
-              key: "compute",
-              values: ["true"]
+              key: "type",
+              values: ["compute"]
             }
           },
         ]
@@ -783,8 +783,8 @@ class AwsProject < Project
           },
           {
             tags: {
-              key: "core",
-              values: ["true"]
+              key: "type",
+              values: ["core"]
             }
           },
         ]
@@ -851,8 +851,8 @@ class AwsProject < Project
           },
           {
             tags: {
-              key: "compute",
-              values: ["true"]
+              key: "type",
+              values: ["compute"]
             }
           }
         ]
