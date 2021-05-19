@@ -40,6 +40,7 @@ class AwsProject < Project
       in: %w(tag account),
       message: "%{value} is not a valid filter level. Must be tag or account."
     }
+  validate :project_tag_if_tag_filter
   after_initialize :add_sdk_objects
 
   default_scope { where(host: "aws") }
@@ -713,6 +714,10 @@ class AwsProject < Project
 
   private
 
+  def project_tag_if_tag_filter
+    errors.add(:project_tag, "Must be defined if filter level is tag") if self.filter_level == "tag" && !project_tag
+  end
+
   def compute_cost_query(start_date, end_date=(start_date + 1), granularity="DAILY", group=nil)
     query = {
       time_period: {
@@ -973,7 +978,7 @@ class AwsProject < Project
         filters: [
           {
             name: "tag:project", 
-            values: [self.name], 
+            values: [self.project_tag], 
           }, 
         ], 
       }
@@ -984,7 +989,7 @@ class AwsProject < Project
     {
       tags: {
         key: "project",
-        values: [self.name]
+        values: [self.project_tag]
       }
     }
   end
