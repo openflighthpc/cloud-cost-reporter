@@ -38,7 +38,6 @@ db.execute "CREATE TABLE IF NOT EXISTS customers(
 db.execute "CREATE TABLE IF NOT EXISTS projects(
   name TEXT,
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  client_id INTEGER,
   host TEXT,
   project_tag TEXT,
   filter_level TEXT,
