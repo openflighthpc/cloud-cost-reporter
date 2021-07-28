@@ -643,17 +643,19 @@ class AzureProject < Project
       )
       if response.success?
         details = response['value']
-        # Sometimes Azure will duplicate each cost item. We know there are exactly two of each in this situation
-        # so can sort so sequential and then remove every other item
+        # Sometimes Azure will duplicate cost items, or have cost items with the same name/id but different
+        # details. We will remove the full duplicates and keep those with the same name/id but different details.
+        # We assume there is no more than 1 duplicate for each
         if details.length > 1
-          dupe_count = 0
-          details.each do |cost|
-            break if dupe_count > 1
-            dupe_count += 1 if cost["id"] == details[0]["id"]
-          end
-          if dupe_count > 1
-            details.sort_by! { |cost| cost["id"] }
-            filtered_details = details.select.with_index { |cost, index| index % 2 == 0 } 
+          details.sort_by! { |cost| [cost["name"], cost['properties']['cost']] }
+          previous = nil
+          filtered_details = details.reject.with_index do |cost, index|
+            result = false
+            if index > 0
+              result = cost == previous
+            end
+            previous = cost
+            result
           end
         end
         filtered_details ? filtered_details : details
