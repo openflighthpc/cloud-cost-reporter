@@ -59,8 +59,8 @@ class Project < ActiveRecord::Base
       message: "%{value} is not a valid host"
     }
   scope :active, -> { 
-    where("end_date > ? OR end_date IS NULL", Date.today).where(
-          "start_date <= ?", Date.today)
+    where("end_date IS NULL OR (end_date > ? AND end_date NOT LIKE ?)", Date.today, "%#{Date.today}%").where(
+          "start_date <= ? OR start_date LIKE ?", Date.today, "%#{Date.today.to_s}%")
   }
   
   def aws?
