@@ -51,7 +51,18 @@ In this application, Azure projects are tracked either by a subscription, or by 
 
 Tags are available in the Azure instances API after a few minutes, but will only be reflected in costs for dates/times after the tags have been added.
 
-In order to run the application, an app and service principal must be created in Azure Active Directory (see https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal for more details). The app must have at least `Reader` level permissions given to it in the subscription you wish to use it in, via the `Access control (IAM)` blade.
+In order to run the application, an app and service principal must be created in Azure Active Directory (see https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal for more details).
+
+`Account Owner can view charges` must be set for the subscription and the following permissions set for the app:
+
+- `Reader` level access to the subscription
+- `User.Read` for the Microsoft.Graph service
+- `Microsoft.Compute/*/read` for the Virtual Machines service
+
+And if using the `cloud-cost-visualiser` in conjunction with this application:
+- `Microsoft.Compute/virtualMachines/start/action`
+- `Microsoft.Compute/virtualMachines/restart/action`
+- `Microsoft.Compute/virtualMachines/deallocate/action`
 
 Azure projects require the following details to be obtained prior to project creation:
 
