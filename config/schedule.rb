@@ -34,5 +34,5 @@ every :monday, at: '12pm' do
 end
 
 every 5.minutes do
-  command "./record_instance_logs.rb all rerun"
+  command "ruby #{File.expand_path("..", File.dirname(__FILE__))}/record_instance_logs.rb all rerun"
 end
