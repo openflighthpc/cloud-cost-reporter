@@ -11,6 +11,11 @@ task :weekly_reports do
   system("SLACK_TOKEN=#{slack_token} ruby weekly_reports.rb all latest slack")
 end
 
+desc 'Record all instance logs'
+task :instance_logs do
+  system("ruby record_instance_logs all rerun")
+end
+
 desc 'Get latest azure prices'
 task :azure_prices do
   system("ruby get_latest_azure_prices.rb")
