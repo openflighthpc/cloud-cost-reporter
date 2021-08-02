@@ -34,6 +34,7 @@ db.execute "CREATE TABLE IF NOT EXISTS projects(
   name TEXT,
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   host TEXT,
+  user_id INTEGER,
   project_tag TEXT,
   filter_level TEXT,
   start_date TEXT,
