@@ -32,3 +32,7 @@ end
 every :monday, at: '12pm' do
   rake "weekly_reports"
 end
+
+every 5.minutes do
+  command "./record_instance_logs.rb all rerun"
+end
