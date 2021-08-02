@@ -13,7 +13,7 @@ end
 
 desc 'Record all instance logs'
 task :instance_logs do
-  system("ruby record_instance_logs all rerun")
+  system("ruby record_instance_logs.rb all rerun")
 end
 
 desc 'Get latest azure prices'
