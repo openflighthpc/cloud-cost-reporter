@@ -29,7 +29,7 @@ require 'date'
 require_relative './models/project_factory'
 
 def all_projects(date, slack, text, rerun, verbose, customer_facing, short)
-  ProjectFactory.new().all_active_projects_as_type.each do |project|
+  ProjectFactory.new().all_projects_within_costs_period_as_type.each do |project|
     begin
       project.daily_report(date, slack, text, rerun, verbose, customer_facing, short)
     rescue AzureApiError, AwsSdkError => e
