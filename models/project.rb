@@ -64,7 +64,7 @@ class Project < ActiveRecord::Base
   }
   scope :within_costs_period, -> {
     where("end_date IS NULL OR (end_date > ? AND end_date NOT LIKE ?)", DEFAULT_DATE - 1, "%#{(DEFAULT_DATE - 1).to_s}%").where(
-          "start_date <= ? OR start_date LIKE ?", DEFAULT_DATE - 1, "%#{(DEFAULT_DATE - 1).to_s}%")
+          "start_date <= ? OR start_date LIKE ?", Date.today, "%#{Date.today.to_s}%")
   }
   
   def aws?
