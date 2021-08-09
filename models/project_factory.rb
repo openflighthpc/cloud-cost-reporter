@@ -41,8 +41,8 @@ class ProjectFactory
 
   # include projects that have ended, but still have days we need
   # to record cost logs for
-  def all_projects_within_costs_period_as_type
-    Project.within_costs_period.map { |project| as_type(project) }
+  def all_projects_within_costs_period_as_type(date)
+    Project.within_costs_period(date).map { |project| as_type(project) }
   end
 
   def as_type(project)
