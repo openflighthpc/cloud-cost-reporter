@@ -305,6 +305,8 @@ class AzureProject < Project
   end
 
   def record_instance_logs(rerun=false)
+    return if self.end_date # can't record instance logs if cluster is no more
+
     refresh_auth_token
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
