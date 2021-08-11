@@ -597,6 +597,8 @@ class AwsProject < Project
   end
 
   def record_instance_logs(rerun=false)
+    return if self.end_date # can't record instance logs if cluster is no more
+
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
     today_logs.delete_all if rerun
     if today_logs.count == 0

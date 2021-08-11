@@ -122,7 +122,7 @@ Please see https://github.com/javan/whenever for more details on using the `when
 
 The application includes functionality for generating both daily and weekly reports of cloud usage and cost data. The obtained data is saved in the database and, unless specified, queries where an existing report exists will use stored data instead of making fresh sdk/api calls.
 
-Daily reports can be generated using `ruby daily_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for 3 days ago (as cost & usage data takes 3 days to update). The results will be printed to the terminal and posted to the chosen slack channel(s).
+Daily reports can be generated using `ruby daily_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for 3 days ago (as cost & usage data takes 3 days to update). The results will be printed to the terminal and posted to the chosen slack channel(s). A daily report will not be generated if the cost date is earlier than a project's start date or after its end date.
 
 Weekly reports can similarly be generated using `ruby weekly_reports.rb`. If run without any arguments, this will iterate over all Projects in the database and retrieve data for the month so far, including estimating costs for the rest of the month. The results will be printed to the terminal and posted to the chosen slack channel(s). Weekly reports use the specified date (3 days ago by default) for historical cost data, and will use either use the specified date's instance information, or today's if generating the 'latest' report.
 

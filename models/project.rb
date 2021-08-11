@@ -59,8 +59,12 @@ class Project < ActiveRecord::Base
       message: "%{value} is not a valid host"
     }
   scope :active, -> { 
-    where("end_date IS NULL OR (end_date > ? AND end_date NOT LIKE ?)", Date.today, "%#{Date.today}%").where(
+    where("end_date IS NULL OR (end_date > ? AND end_date NOT LIKE ?)", Date.today, "%#{Date.today.to_s}%").where(
           "start_date <= ? OR start_date LIKE ?", Date.today, "%#{Date.today.to_s}%")
+  }
+  scope :within_costs_period, -> (date = DEFAULT_DATE) {
+    where("end_date IS NULL OR (end_date > ? AND end_date NOT LIKE ?)", date - 1, "%#{(date - 1).to_s}%").where(
+          "start_date <= ? OR start_date LIKE ?", date, "%#{date.to_s}%")
   }
   
   def aws?
