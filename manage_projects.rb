@@ -32,11 +32,11 @@ def add_or_update_project(action=nil)
   @factory = ProjectFactory.new
   if action == nil
     print "List, add or update project(s) (list/add/update/validate)? "
-    action = gets.chomp.downcase
+    action = gets.chomp.downcase.strip
   end
   if action == "update" || action == "validate"
     print "Project name: "
-    project_name = gets.chomp
+    project_name = gets.chomp.strip
     project = Project.find_by_name(project_name)
     if project == nil
       puts "Project not found. Please try again."
@@ -80,7 +80,7 @@ def update_attributes(project)
   attribute = nil
   while !valid
     puts "What would you like to update (for security related attributes please select metadata)? "
-    attribute = gets.chomp
+    attribute = gets.chomp.strip
     if project.respond_to?(attribute.downcase) || attribute == "budget"
       valid = true
     else
@@ -138,7 +138,7 @@ def update_attributes(project)
       valid = false
       while !valid
         print "Would you like to validate the project's credentials (y/n)? "
-        response = gets.chomp.downcase
+        response = gets.chomp.downcase.strip
         if response == "n"
           stop = true
           valid = true
@@ -154,7 +154,7 @@ def update_attributes(project)
       end
     end
   puts "Would you like to update another field (y/n)?"
-  action = gets.chomp.downcase
+  action = gets.chomp.downcase.strip
   if action == "y"
     return update_attributes(project)
   end
@@ -175,7 +175,7 @@ def update_regions(project)
     puts "Regions: #{regions.join(", ")}"
     while !valid
       puts "Add or delete region (add/delete)? "
-      response = gets.chomp.downcase
+      response = gets.chomp.downcase.strip
       if response == "add"
         valid = true
         region = get_non_blank("Add region (e.g. eu-central-1)", "Region")
@@ -183,7 +183,7 @@ def update_regions(project)
         while !continue
           if !aws_regions.include?(region)
             puts "Warning: #{region} not found in list of valid aws regions. Do you wish to continue (y/n)? "
-            response = gets.chomp.downcase
+            response = gets.chomp.downcase.strip
             if response == "n"
               return update_regions(project)
             elsif response != "y"
@@ -207,7 +207,7 @@ def update_regions(project)
           while !present
             # we want to allow blanks here so can delete if one (somehow) previously added
             print "Region to delete: "
-            to_delete = gets.chomp
+            to_delete = gets.chomp.strip
             present = regions.include?(to_delete)
             if present
               regions.delete(to_delete)
@@ -229,7 +229,7 @@ def update_regions(project)
     yes_or_no = false
     while !yes_or_no
       print "Add/ delete another region (y/n)? "
-      action = gets.chomp.downcase
+      action = gets.chomp.downcase.strip
       if action == "n"
         stop = true
         yes_or_no = true
@@ -253,7 +253,7 @@ def update_resource_groups(project)
     puts "Resource groups: #{resource_groups.join(", ")}"
     while !valid
       puts "Add or delete resource group (add/delete)? "
-      response = gets.chomp.downcase
+      response = gets.chomp.downcase.strip
       if response == "add"
         valid = true
         resource_groups << get_non_blank("Add resource group", "Resource group").downcase
@@ -268,7 +268,7 @@ def update_resource_groups(project)
           while !present
             # we want to allow blanks here so can delete if one (somehow) previously added
             print "Resource group to delete: "
-            to_delete = gets.chomp.downcase
+            to_delete = gets.chomp.downcase.strip
             present = resource_groups.include?(to_delete)
             if present
               resource_groups.delete(to_delete)
@@ -290,7 +290,7 @@ def update_resource_groups(project)
     yes_or_no = false
     while !yes_or_no
       print "Add/ delete another resource group (y/n)? "
-      action = gets.chomp.downcase
+      action = gets.chomp.downcase.strip
       if action == "n"
         stop = true
         yes_or_no = true
@@ -308,11 +308,11 @@ end
 def add_project
   attributes = {}
   print "Project name: "
-  attributes[:name] = gets.chomp
+  attributes[:name] = gets.chomp.strip
   valid = false
   while !valid
     print "Host (aws or azure): "
-    value = gets.chomp.downcase
+    value = gets.chomp.downcase.strip
     valid = ["aws", "azure"].include?(value)
     valid ? attributes[:host] = value : (puts "Invalid selection. Please enter aws or azure.")
   end
@@ -320,7 +320,7 @@ def add_project
   while !valid_date
     print "Start date (YYYY-MM-DD): "
     valid_date = begin
-      Date.parse(gets.chomp)
+      Date.parse(gets.chomp).strip
     rescue ArgumentError
       false
     end
@@ -333,7 +333,7 @@ def add_project
   valid_date = false
   while !valid_date
     print "End date (YYYY-MM-DD). Press enter to leave blank: "
-    date = gets.chomp
+    date = gets.chomp.strip
     break if date.empty?
     valid_date = begin
       Date.parse(date)
@@ -369,7 +369,7 @@ def add_project
       valid = false
       while !valid
         print "Additional regions (y/n)? "
-        response = gets.chomp.downcase
+        response = gets.chomp.downcase.strip
         if response == "n"
           stop = true
           valid = true
@@ -424,7 +424,7 @@ def add_project
         valid = false
         while !valid
           print "Additional resource groups (y/n)? "
-          response = gets.chomp.downcase
+          response = gets.chomp.downcase.strip
           if response == "n"
             stop = true
             valid = true
@@ -463,7 +463,7 @@ def add_project
   valid = false
   while !valid
     print "Validate credentials (y/n)? "
-    response = gets.chomp.downcase
+    response = gets.chomp.downcase.strip
     if response == "n"
       valid = true
     elsif response == "y"
@@ -479,7 +479,7 @@ def add_project
     while !valid
       print "Project start date is in the past. Would you like to retrieve and record historic costs (y/n)? "
       print "This may take a long time (5+ mins per month of data). " if project.azure?
-      response = gets.chomp.downcase
+      response = gets.chomp.downcase.strip
       if response == "n"
         stop = true
         valid = true
@@ -523,7 +523,7 @@ def add_budget(project)
   while !valid_date
     print "Effective at (YYYY-MM-DD): "
     valid_date = begin
-      Date.parse(gets.chomp)
+      Date.parse(gets.chomp).strip
     rescue ArgumentError
       false
     end

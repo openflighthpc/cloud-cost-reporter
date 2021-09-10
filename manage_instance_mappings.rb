@@ -38,7 +38,7 @@ def add_or_update_mapping
       mapping = nil
       while !mapping
         print "Instance type name: "
-        type_name = gets.chomp
+        type_name = gets.chomp.strip
         mapping = InstanceMapping.find_by(instance_type: type_name)
         if mapping == nil
           puts "Mapping for that instance type not found. Please try again."
@@ -65,7 +65,7 @@ def update_attributes(mapping)
     attribute = nil
     while !valid
       puts "What would you like to update (type/name)? "
-      attribute = gets.chomp
+      attribute = gets.chomp.strip
       if ["type", "name"].include?(attribute)
         valid = true
       else
@@ -75,14 +75,14 @@ def update_attributes(mapping)
 
     attribute = attribute == "type" ? :instance_type : :customer_facing_name
     print 'Value: '
-    value = gets.chomp
+    value = gets.chomp.strip
     mapping.write_attribute(attribute, value)
     valid = mapping.valid?
     while !valid
       mapping.errors.messages.each do |k, v|
         puts "#{k} #{v.join("; ")}"
         puts "Please enter new #{k}"
-        value = gets.chomp
+        value = gets.chomp.strip
         mapping.write_attribute(k, value)
       end
       valid = mapping.valid?
@@ -90,7 +90,7 @@ def update_attributes(mapping)
     mapping.save!
     puts "#{attribute} updated successfully"
     print "Would you like to update another field (y/n)? "
-    action = gets.chomp.downcase
+    action = gets.chomp.downcase.strip
     if action == "n"
       stop = true
     end
@@ -100,9 +100,9 @@ end
 def add_mapping
   attributes = {}
   print "Instance type name: "
-  attributes[:instance_type] = gets.chomp
+  attributes[:instance_type] = gets.chomp.strip
   print "Customer facing name: "
-  attributes[:customer_facing_name] = gets.chomp
+  attributes[:customer_facing_name] = gets.chomp.strip
 
   mapping = InstanceMapping.new(attributes)
   valid = mapping.valid?
@@ -110,7 +110,7 @@ def add_mapping
     mapping.errors.messages.each do |k, v|
       puts "#{k} #{v.join("; ")}"
       puts "Please enter new #{k}"
-      value = gets.chomp
+      value = gets.chomp.strip
       mapping.write_attribute(k, value)
     end
     valid = mapping.valid?
@@ -123,7 +123,7 @@ def delete_mapping(mapping)
   print "Are you sure you want to delete the mapping for instance type #{mapping.instance_type}? (y/n) "
   valid = false
   while !valid
-    response = gets.chomp.downcase
+    response = gets.chomp.downcase.strip
     if ["y", "n"].include?(response)
       valid = true
     else
