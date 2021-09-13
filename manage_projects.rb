@@ -320,7 +320,7 @@ def add_project
   while !valid_date
     print "Start date (YYYY-MM-DD): "
     valid_date = begin
-      Date.parse(gets.chomp).strip
+      Date.parse(gets.chomp.strip)
     rescue ArgumentError
       false
     end
@@ -523,7 +523,7 @@ def add_budget(project)
   while !valid_date
     print "Effective at (YYYY-MM-DD): "
     valid_date = begin
-      Date.parse(gets.chomp).strip
+      Date.parse(gets.chomp.strip)
     rescue ArgumentError
       false
     end
