@@ -684,7 +684,6 @@ class AzureProject < Project
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.ResourceHealth/availabilityStatuses"
     query = {
       'api-version': '2020-05-01',
-      '$filter': "resourceType eq 'Microsoft.Compute/virtualMachines'"
     }
     attempt = 0
     error = AzureApiError.new("Timeout error querying node status Azpire API for project #{name}."\
@@ -700,6 +699,7 @@ class AzureProject < Project
       if response.success?
         nodes = response['value']
         nodes.select do |node|
+          next if !node['id'].match(/virtualmachines/i)
           r_group = node['id'].split('/')[4].downcase
           if filter_level == "subscription" || (filter_level == "resource group" && self.resource_groups.include?(r_group))
             today_compute_nodes.any? do |cn|
