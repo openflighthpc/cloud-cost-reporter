@@ -32,9 +32,38 @@ ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: 'db/cost_t
 class Budget < ActiveRecord::Base
   belongs_to :project
   default_scope { order(:effective_at, timestamp: :asc) }
-  validates :amount, numericality: true, presence: true
   validates :effective_at, presence: true
   validate :effective_at_valid, on: [:update, :create]
+  validate :has_total_or_month
+  validate :monthly_less_than_total
+  validate :monthly_policy_has_limit
+  validate :continuous_policy_has_total
+
+  private
+
+  def total_or_month
+    if !total_amount && !monthly_limit
+      errors.add(:monthly_limit, "or a total amount must be defined")
+    end
+  end
+
+  def monthly_less_than_total
+    if monthly_limit && total_amount && monthly_limit > total_amount
+      errors.add(:monthly_limit, "must be less than total amount")
+    end
+  end
+
+  def monthly_policy_has_limit
+    if policy == "monthly" && !monthly_limit
+      errors.add(:monthly_limit, "must be set for a monthly budget")
+    end
+  end
+
+  def continuous_policy_has_total
+    if policy == "continuous" && !total_amount
+      errors.add(:total_amount, "must be set for continuous budget")
+    end
+  end
 
   def effective_at_valid
     begin
