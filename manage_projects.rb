@@ -51,7 +51,8 @@ def add_or_update_project(action=nil)
     puts "host: #{project.host}"
     puts "start_date: #{project.start_date}"
     puts "end_date: #{project.end_date}"
-    puts "budget: #{project.current_budget}c.u./month"
+    puts "budget policy: #{project.budget_policy}"
+    puts "budget amount: #{project.budget_details}"
     puts "regions: #{project.regions.join(", ")}" if project.aws?
     puts "filter_level: #{project.filter_level}"
     puts "resource_groups: #{project.resource_groups.join(", ")}" if project.azure? && project.filter_level == "resource group"
@@ -63,8 +64,8 @@ def add_or_update_project(action=nil)
     add_project
   elsif action == "list"
     formatter = NoMethodMissingFormatter.new
-    tp ProjectFactory.new().all_projects_as_type, :id, :name, :host, :current_budget, :start_date, :end_date,
-    :slack_channel, {regions: {:display_method => :describe_regions, formatters: [formatter]}},
+    tp ProjectFactory.new().all_projects_as_type, :id, :name, :host, :budget_policy, :budget_details, 
+    :start_date, :end_date, :slack_channel, {regions: {:display_method => :describe_regions, formatters: [formatter]}},
     {resource_groups: {:display_method => :describe_resource_groups, formatters: [formatter]}}, {filter_level: {formatters: [formatter]}},
     {project_tag: {formatters: [formatter]}}
     puts
@@ -79,7 +80,7 @@ def update_attributes(project)
   valid = false
   attribute = nil
   while !valid
-    puts "What would you like to update (for security related attributes please select metadata)? "
+    puts "What would you like to update (for security related attributes please enter metadata, and for budget fields enter budget)? "
     attribute = gets.chomp.strip
     if project.respond_to?(attribute.downcase) || attribute == "budget"
       valid = true
@@ -92,8 +93,8 @@ def update_attributes(project)
     update_regions(project)
   elsif attribute == "resource_groups" || attribute == "resource groups"
     update_resource_groups(project)
-  elsif attribute == "budget"
-    add_budget(project)
+  elsif attribute.include?("budget")
+    add_or_update_budget(project)
   else
     if attribute == "metadata"
       metadata = JSON.parse(project.metadata)
@@ -107,7 +108,7 @@ def update_attributes(project)
     else
       options = nil
       if attribute == "filter_level"
-        options = project.host == "aws" ? "tag/account" : "resource group/subscription"
+        options = project.host == "aws" ? ["tag", "account"] : ["resource group", "subscription"]
       end
       value = get_non_blank(attribute, attribute, options)
       project.write_attribute(attribute.to_sym, value)
@@ -507,16 +508,19 @@ def validate_credentials(project)
   project.validate_credentials
 end
 
+def add_or_update_budget(project)
+  choice = get_non_blank("Budget action", "Budget action", ["add", "update"])
+  choice == "add" ? add_budget(project) : update_budget(project)
+end
+
 def add_budget(project)
-  valid = false
-  while !valid
-    amount = get_non_blank("Budget amount (c.u./month)", "Budget")
-    valid = begin
-      Integer(amount, 10)
-    rescue ArgumentError, TypeError
-      false
-    end
-    puts "Please enter a number" if !valid
+  policy = get_non_blank("Budget Policy", "policy", ["continuous", "monthly"])
+  if policy == "monthly"
+    monthly_limit = get_budget_monthly_limit
+    total_amount = get_budget_total_amount(false)
+  else
+    total_amount = get_budget_total_amount
+    monthly_limit = get_budget_monthly_limit(false)
   end
 
   valid_date = false
@@ -529,20 +533,77 @@ def add_budget(project)
     end
     puts "Invalid date. Please ensure it is in the format YYYY-MM-DD" if !valid_date
   end
-  budget = Budget.new(project_id: project.id, amount: amount, effective_at: valid_date, timestamp: Time.now)
+  budget = Budget.new(project_id: project.id, policy: policy, total_amount: total_amount,
+                      monthly_limit: monthly_limit, effective_at: valid_date, timestamp: Time.now)
   budget.save!
   puts "Budget created"
+end
+
+def get_budget_monthly_limit(required=true)
+  valid = false
+  while !valid
+    if required
+      monthly_limit = get_non_blank("Monthly limit (c.u./month)", "Monthly Limit")
+    else
+      puts "Optional (press enter to leave blank)"
+      print "Monthly limit (c.u./month): "
+      monthly_limit = gets.chomp.strip
+      monthly_limit = nil if monthly_limit == ""
+    end
+    if monthly_limit || required
+      valid = begin
+      Integer(monthly_limit, 10)
+      rescue ArgumentError, TypeError
+        false
+      end
+      puts "Please enter a number" if !valid
+    else
+      valid = true
+    end
+  end
+  monthly_limit
+end
+
+def get_budget_total_amount(required=true)
+  valid = false
+  while !valid
+    if required
+      total_amount = get_non_blank("Total amount (c.u.)", "Total Amount")
+    else
+      puts "Optional (press enter to leave blank)"
+      print "Total amount (c.u.): "
+      total_amount = gets.chomp.strip
+      total_amount = nil if total_amount == ""
+    end
+    if total_amount || required
+      valid = begin
+        Integer(total_amount, 10)
+      rescue ArgumentError, TypeError
+        false
+      end
+    else
+      valid = true
+    end
+    puts "Please enter a number" if !valid
+  end
+  total_amount
+end
+
+def update_budget(project)
+
 end
 
 def get_non_blank(text, attribute=text, options=nil)
   valid = false
   while !valid
     print "#{text}"
-    print "(#{options})" if options
+    print "(#{options.join("/")})" if options
     print ": "
     response = gets.strip
     if response.empty?
       puts "#{attribute} must not be blank"
+    elsif options && !options.include?(response)
+      puts "Must be #{options.join("/")}"
     else
       valid = true
     end

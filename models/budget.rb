@@ -50,7 +50,7 @@ class Budget < ActiveRecord::Base
 
   private
 
-  def total_or_month
+  def has_total_or_month
     if !total_amount && !monthly_limit
       errors.add(:monthly_limit, "or a total amount must be defined")
     end

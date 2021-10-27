@@ -81,10 +81,25 @@ class Project < ActiveRecord::Base
   end
 
   def current_budget
-    return 0 if !active?
+    if !@current_budget
+      if active?
+        @current_budget = self.budgets.where("effective_at <= ? ", Date.today).last
+      end
+      @current_budget ||= Budget.new(project_id: self.id, monthly_limit: 0, policy: "monthly")
+    end
+    @current_budget
+  end
 
-    latest = self.budgets.where("effective_at <= ? ", Date.today).last
-    latest ? latest.amount : 0
+  def budget_policy
+    current_budget.policy
+  end
+
+  def budget_details
+    "#{current_budget_amount}c.u.#{"/month" if budget_policy == "monthly"}"
+  end
+
+  def current_budget_amount
+    current_budget.amount
   end
 
   def daily_report(date=DEFAULT_DATE, slack=true, text=true, rerun=false, verbose=false, customer_facing=false)

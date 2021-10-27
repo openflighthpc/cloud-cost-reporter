@@ -235,7 +235,7 @@ class AwsProject < Project
       daily_future_cu = (future_costs * CostLog::USD_GBP_CONVERSION * 24 * 12.5 * 1.25).ceil
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
-      remaining_budget = self.current_budget.to_i - total_costs
+      remaining_budget = self.current_budget_amount.to_i - total_costs
       remaining_days = (remaining_budget - inbetween_costs) / (daily_future_cu + fixed_daily_cu_cost)
       enough = (date + remaining_days) >= (date >> 1).beginning_of_month
       date_range = "1 - #{(date).day} #{Date::MONTHNAMES[date.month]}"
@@ -244,7 +244,7 @@ class AwsProject < Project
       msg = [
       "#{date_warning if date_warning}",
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
-      "*Monthly Budget:* #{self.current_budget} compute units",
+      "*Monthly Budget:* #{self.current_budget_amount} compute units",
       "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
       "*Data Egress Costs for #{date_range}:* #{data_egress_costs} compute units (#{data_egress_amount} GB)",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
