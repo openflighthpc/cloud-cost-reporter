@@ -347,18 +347,6 @@ def add_project
       puts "Invalid date. Please ensure it is in the format YYYY-MM-DD"
     end
   end
-  
-  budget = nil
-  valid = false
-  while !valid
-    budget = get_non_blank("Budget amount (c.u./month)", "Budget")
-    valid = begin
-      Integer(budget, 10)
-    rescue ArgumentError, TypeError
-      false
-    end
-    puts "Please enter a number" if !valid
-  end
   attributes[:slack_channel] = get_non_blank("Slack Channel", "Slack Channel")
 
   metadata = {}
@@ -457,7 +445,7 @@ def add_project
   end
   project.save
 
-  Budget.create(project_id: project.id, amount: budget, effective_at: project.start_date, timestamp: Time.now)
+  add_budget(project)
   puts "Project #{project.name} created"
   
   credentials = nil
