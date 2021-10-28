@@ -38,7 +38,6 @@ class Budget < ActiveRecord::Base
       message: "%{value} is not a valid budget policy. Must be monthly or continuous."
     }
   validate :effective_at_valid, on: [:update, :create]
-  validate :has_total_or_month
   validate :monthly_less_than_total
   validate :monthly_policy_has_limit
   validate :continuous_policy_has_total
@@ -49,12 +48,6 @@ class Budget < ActiveRecord::Base
   end
 
   private
-
-  def has_total_or_month
-    if !total_amount && !monthly_limit
-      errors.add(:monthly_limit, "or a total amount must be defined")
-    end
-  end
 
   def monthly_less_than_total
     if monthly_limit && total_amount && monthly_limit > total_amount

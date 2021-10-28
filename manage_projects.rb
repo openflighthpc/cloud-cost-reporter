@@ -510,7 +510,7 @@ end
 
 def add_or_update_budget(project)
   choice = get_non_blank("Budget action", "Budget action", ["add", "update"])
-  choice == "add" ? add_budget(project) : update_budget(project)
+  choice == "add" ? add_budget(project) : update_budget(project.current_budget)
 end
 
 def add_budget(project)
@@ -589,8 +589,36 @@ def get_budget_total_amount(required=true)
   total_amount
 end
 
-def update_budget(project)
-
+def update_budget(budget)
+  puts "Policy: #{budget.policy}"
+  puts "Monthly limit: #{budget.monthly_limit}"
+  puts "Total amount: #{budget.total_amount}"
+  puts "Effective at: #{budget.effective_at}"
+  attribute = get_non_blank("Update", "Update", %w[policy monthly_limit total_amount effective_at])
+  if attribute == "monthly_limit" && budget.policy == "continuous"
+    print "Monthly limit (press enter to leave blank): "
+    value = gets.chomp.strip
+  elsif attribute == "total_amount" && budget.policy == "monthly"
+    print "Total amount (press enter to leave blank): "
+    value = gets.chomp.strip
+  else
+    value = get_non_blank(attribute)
+  end
+  budget.write_attribute(attribute.to_sym, value)
+  valid = budget.valid?
+  while !valid
+    budget.errors.messages.each do |k, v|
+      puts "#{k} #{v.join("; ")}"
+      puts "Please enter new #{k}"
+      value = get_non_blank(k)
+      budget.write_attribute(k, value)
+    end
+    valid = budget.valid?
+  end
+  budget.save!
+  puts "budget updated successfully"
+  again = get_non_blank("Update another attribute?", "Update another attribute?", %w[y n])
+  return update_budget(budget) if again == "y"
 end
 
 def get_non_blank(text, attribute=text, options=nil)
