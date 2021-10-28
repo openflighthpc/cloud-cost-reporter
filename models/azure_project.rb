@@ -327,6 +327,8 @@ class AzureProject < Project
         cnode = today_compute_nodes.detect do |compute_node|
                   compute_node['name'] == name  && resource_group == compute_node['id'].split("/")[4].downcase
                 end
+        next if !cnode
+
         type = cnode['properties']['hardwareProfile']['vmSize']
         compute = cnode.key?('tags') && cnode['tags']['type'] == 'compute'
         compute_group = cnode.key?('tags') ? cnode['tags']['compute_group'] : nil
