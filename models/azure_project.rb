@@ -248,7 +248,7 @@ class AzureProject < Project
       daily_future_cu = (future_costs * 24 * 12.5 * 1.25).ceil
       total_future_cu = (daily_future_cu + fixed_daily_cu_cost).ceil
 
-      remaining_budget = current_budget.to_i - total_costs
+      remaining_budget = current_budget_amount.to_i - total_costs
       remaining_days = (remaining_budget - inbetween_costs) / (daily_future_cu + fixed_daily_cu_cost)
       time_lag = (instances_date.to_date - date).to_i
       enough = (date + remaining_days) >= (date >> 1).beginning_of_month
@@ -258,7 +258,7 @@ class AzureProject < Project
       msg = [
       "#{date_warning if date_warning}",
       ":calendar: \t\t\t\t Weekly Report for #{self.name} \t\t\t\t :calendar:",
-      "*Monthly Budget:* #{current_budget} compute units",
+      "*Monthly Budget:* #{current_budget_amount} compute units",
       "*Compute Costs for #{date_range}:* #{compute_costs} compute units",
       "*Data Egress Costs for #{date_range}:* #{data_out_cost} compute units (#{data_out_amount.ceil(2)} GB)",
       "*Total Costs for #{date_range}:* #{total_costs} compute units",
