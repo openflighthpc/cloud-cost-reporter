@@ -305,13 +305,19 @@ class AzureProject < Project
   end
 
   def record_instance_logs(rerun=false)
-    return if self.end_date # can't record instance logs if cluster is no more
+    # can't record instance logs if resource group deleted
+    if self.end_date && Date.parse(self.end_date) <= Date.today
+      return "Logs not recorded, project has ended"
+    end
 
     refresh_auth_token
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
+    overwriting = today_logs.any?
     today_logs.delete_all if rerun
+    log_recorded = false
     if !today_logs.any?
       active_nodes = api_query_active_nodes
+      any_nodes = active_nodes.any?
       active_nodes&.each do |node|
         # Azure API returns ids with inconsistent capitalisations so need to edit them here
         instance_id = node['id']
@@ -344,7 +350,17 @@ class AzureProject < Project
           region: region,
           timestamp: Time.now.to_s
         )
+        log_recorded = true
       end
+    end
+    if !log_recorded
+      if !rerun
+        return "Logs already recorded. Run script again with 'rerun' to overwrite existing logs."
+      else
+        return "No logs to record"
+      end
+    else
+      return overwriting ? "New logs for today recorded (existing logs overwritten)" : "First logs for today recorded"
     end
   end
 
