@@ -317,7 +317,7 @@ class AzureProject < Project
       if rerun 
         outcome = "Overwriting existing logs. "
       else
-        return "Logs already recorded. Run script again with 'rerun' to overwrite existing logs."
+        return "Logs already recorded for today. Run script again with 'rerun' to overwrite existing logs."
       end
     else
       outcome = "Writing new logs for today. "
@@ -347,9 +347,9 @@ class AzureProject < Project
         type = cnode['properties']['hardwareProfile']['vmSize']
         compute = cnode.key?('tags') && cnode['tags']['type'] == 'compute'
         compute_group = cnode.key?('tags') ? cnode['tags']['compute_group'] : nil
-        InstanceLog.create(
+        log = InstanceLog.create(
           instance_id: instance_id,
-          project_id: id,
+          project_id: "id",
           instance_type: type,
           instance_name: name,
           compute: compute ? 1 : 0,
@@ -359,7 +359,7 @@ class AzureProject < Project
           region: region,
           timestamp: Time.now.to_s
         )
-        log_recorded = true
+        log_recorded = true if log.valid? && log.persisted?
       end
     end
     outcome << (log_recorded ? "Logs recorded" : "No logs to record.")

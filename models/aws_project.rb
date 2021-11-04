@@ -597,10 +597,24 @@ class AwsProject < Project
   end
 
   def record_instance_logs(rerun=false)
-    return if self.end_date # can't record instance logs if cluster is no more
+    # can't record instance logs if project is no more
+    if self.end_date && Date.parse(self.end_date) <= Date.today
+      return "Logs not recorded, project has ended"
+    end
 
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
+    outcome = ""
+    if today_logs.any?
+      if rerun 
+        outcome = "Overwriting existing logs. "
+      else
+        return "Logs already recorded for today. Run script again with 'rerun' to overwrite existing logs."
+      end
+    else
+      outcome = "Writing new logs for today. "
+    end
     today_logs.delete_all if rerun
+    log_recorded = false
     if today_logs.count == 0
       regions.reverse.each do |region|
         begin
@@ -629,7 +643,7 @@ class AwsProject < Project
               end
             end
 
-            InstanceLog.create(
+            log = InstanceLog.create(
               instance_id: instance.instance_id,
               project_id: self.id,
               instance_name: named,
@@ -641,10 +655,13 @@ class AwsProject < Project
               region: region,
               timestamp: Time.now.to_s
             )
+            log_recorded = true if log.valid? && log.persisted?
           end
         end
       end
     end
+    outcome << (log_recorded ? "Logs recorded" : "No logs to record.")
+    outcome
   end
 
   def get_data_out(date=DEFAULT_DATE)
