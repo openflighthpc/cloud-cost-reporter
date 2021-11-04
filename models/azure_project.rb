@@ -310,9 +310,18 @@ class AzureProject < Project
       return "Logs not recorded, project has ended"
     end
 
+    outcome = ""
     refresh_auth_token
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
-    overwriting = today_logs.any?
+    if today_logs.any?
+      if rerun 
+        outcome = "Overwriting existing logs. "
+      else
+        return "Logs already recorded. Run script again with 'rerun' to overwrite existing logs."
+      end
+    else
+      outcome = "Writing new logs for today. "
+    end
     today_logs.delete_all if rerun
     log_recorded = false
     if !today_logs.any?
@@ -353,15 +362,8 @@ class AzureProject < Project
         log_recorded = true
       end
     end
-    if !log_recorded
-      if !rerun
-        return "Logs already recorded. Run script again with 'rerun' to overwrite existing logs."
-      else
-        return "No logs to record"
-      end
-    else
-      return overwriting ? "New logs for today recorded (existing logs overwritten)" : "First logs for today recorded"
-    end
+    outcome << (log_recorded ? "Logs recorded" : "No logs to record.")
+    outcome
   end
 
   def get_overall_usage(date, customer_facing=false)
