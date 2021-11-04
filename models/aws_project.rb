@@ -615,6 +615,7 @@ class AwsProject < Project
     end
     today_logs.delete_all if rerun
     log_recorded = false
+    any_nodes = false
     if today_logs.count == 0
       regions.reverse.each do |region|
         begin
@@ -627,6 +628,7 @@ class AwsProject < Project
           raise AwsSdkError.new("Unable to determine AWS instances for project #{self.name} due to missing region. #{error if @verbose}")  
         end
         @instances_checker.describe_instances(project_instances_query).reservations.each do |reservation|
+          any_nodes = true if reservation.instances.any?
           reservation.instances.each do |instance|
             named = ""
             compute = false
@@ -660,7 +662,7 @@ class AwsProject < Project
         end
       end
     end
-    outcome << (log_recorded ? "Logs recorded" : "No logs to record.")
+    outcome << (log_recorded ? "Logs recorded" : (any_nodes ? "Logs NOT recorded" : "No logs to record"))
     outcome
   end
 

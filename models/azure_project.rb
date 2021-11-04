@@ -349,7 +349,7 @@ class AzureProject < Project
         compute_group = cnode.key?('tags') ? cnode['tags']['compute_group'] : nil
         log = InstanceLog.create(
           instance_id: instance_id,
-          project_id: "id",
+          project_id: id,
           instance_type: type,
           instance_name: name,
           compute: compute ? 1 : 0,
@@ -362,7 +362,7 @@ class AzureProject < Project
         log_recorded = true if log.valid? && log.persisted?
       end
     end
-    outcome << (log_recorded ? "Logs recorded" : "No logs to record.")
+    outcome << (log_recorded ? "Logs recorded" : (any_nodes ? "Logs NOT recorded" : "No logs to record"))
     outcome
   end
 
