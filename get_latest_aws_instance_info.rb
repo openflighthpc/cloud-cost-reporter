@@ -28,9 +28,9 @@
 require_relative './models/aws_project.rb'
 
 # Need AWS credentials to get instance list, so use a project in database.
-project = AwsProject.first
+project = AwsProject.active.first
 if !project
-  puts "No AWS projects in database to retrieve instances details"
+  puts "No active AWS projects in database to retrieve instances details"
 else
   project.get_aws_instance_info
 end
