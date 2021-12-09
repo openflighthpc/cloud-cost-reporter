@@ -199,7 +199,7 @@ class AzureProject < Project
       total_costs ||= 0.0
       total_costs = (total_costs * 12.5 * 1.25).ceil
 
-      data_out_costs = costs_this_month.select { |cost| cost["properties"]["meterDetails"]["meterName"] == "Data Transfer Out" }
+      data_out_costs = costs_this_month.select { |cost| cost["properties"]["meterName"] == "Data Transfer Out" }
 
       data_out_cost = 0.0
       data_out_amount = 0.0
@@ -211,7 +211,7 @@ class AzureProject < Project
 
       compute_costs_this_month = costs_this_month.select do |cost|
         cost["tags"] && cost["tags"]["type"] == "compute" &&
-        cost["properties"]["meterDetails"]["meterCategory"] == "Virtual Machines"
+        cost["properties"]["meterCategory"] == "Virtual Machines"
       end
       compute_costs = begin
                      compute_costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
@@ -401,7 +401,7 @@ class AzureProject < Project
       # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
       # Cost Analysis page (under 'Actual Cost') for the period selected.
       daily_cost = begin
-                    cost_entries.map { |c| c['properties']['cost'] }.reduce(:+)
+                    cost_entries.map { |c| c['properties']['costInBillingCurrency'] }.reduce(:+)
                   rescue NoMethodError
                     0.0
                   end
@@ -431,12 +431,12 @@ class AzureProject < Project
     if !compute_cost_log || rerun
       compute_costs = cost_entries.select do |cost|
         cost["tags"] && cost["tags"]["type"] == "compute" &&
-        cost["properties"]["meterDetails"]["meterCategory"] == "Virtual Machines"
+        cost["properties"]["meterCategory"] == "Virtual Machines"
       end
 
       cost_breakdown = {total: 0.0}
       compute_costs.each do |cost|
-        value = cost['properties']['cost']
+        value = cost['properties']['costInBillingCurrency']
         group = cost["tags"] ? cost["tags"]["compute_group"] : nil
         cost_breakdown[:total] += value
         if group && !cost_breakdown.has_key?(group)
@@ -475,11 +475,11 @@ class AzureProject < Project
     if !core_cost_log || rerun
       core_costs = cost_entries.select do |cost|
         cost["tags"] && cost["tags"]["type"] == "core" &&
-        cost["properties"]["meterDetails"]["meterName"] != "Data Transfer Out" && 
-        !cost["properties"]["meterDetails"]["meterName"].include?("Disks")
-      end  
+        cost["properties"]["meterName"] != "Data Transfer Out" && 
+        !cost["properties"]["meterName"].include?("Disks")
+      end
       core_cost = begin
-                      core_costs.map { |c| c['properties']['cost'] }.reduce(:+)
+                      core_costs.map { |c| c['properties']['costInBillingCurrency'] }.reduce(:+)
                      rescue NoMethodError
                       0.0
                      end
@@ -507,12 +507,12 @@ class AzureProject < Project
     data_out_figures = nil
     # only calculate if don't already have data in logs, or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
-      data_out_costs = cost_entries.select { |cost| cost["properties"]["meterDetails"]["meterName"] == "Data Transfer Out" }
+      data_out_costs = cost_entries.select { |cost| cost["properties"]["meterName"] == "Data Transfer Out" }
 
       data_out_cost = 0.0
       data_out_amount = 0.0
       data_out_costs.each do |cost|
-        data_out_cost += cost['properties']['cost']
+        data_out_cost += cost['properties']['costInBillingCurrency']
         data_out_amount += cost['properties']['quantity']
       end
       
@@ -553,9 +553,9 @@ class AzureProject < Project
     storage_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "storage")
 
     if !storage_cost_log || rerun
-      storage_costs = cost_entries.select { |cost| cost["properties"]["meterDetails"]["meterName"].include?("Disks") }
+      storage_costs = cost_entries.select { |cost| cost["properties"]["meterName"].include?("Disks") }
       storage_cost = begin
-                      storage_costs.map { |c| c['properties']['cost'] }.reduce(:+)
+                      storage_costs.map { |c| c['properties']['costInBillingCurrency'] }.reduce(:+)
                      rescue NoMethodError
                       0.0
                      end
@@ -567,7 +567,7 @@ class AzureProject < Project
         storage_cost_log = CostLog.create(
           project_id: id,
           cost: storage_cost,
-          currency: 'GBP',
+          currency: 'costInBillingCurrency',
           scope: 'storage',
           date: date.to_s,
           timestamp: Time.now.to_s
@@ -649,8 +649,10 @@ class AzureProject < Project
     filter << " #{resource_groups_conditional}" if filter_level == "resource group"
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails?$expand=meterDetails"
     query = {
-      'api-version': '2019-10-01',
-      '$filter': filter
+      'api-version': '2021-10-01',
+      '$filter': filter,
+      'startDate': start_date,
+      'endDate': end_date
     }
     attempt = 0
     error = AzureApiError.new("Timeout error querying daily cost Azure API for project"\
@@ -669,7 +671,7 @@ class AzureProject < Project
         # details. We will remove the full duplicates and keep those with the same name/id but different details.
         # We assume there is no more than 1 duplicate for each
         if details.length > 1
-          details.sort_by! { |cost| [cost["name"], cost['properties']['cost']] }
+          details.sort_by! { |cost| [cost["name"], cost['properties']['costInBillingCurrency']] }
           previous = nil
           filtered_details = details.reject.with_index do |cost, index|
             result = false
@@ -680,7 +682,12 @@ class AzureProject < Project
             result
           end
         end
-        filtered_details ? filtered_details : details
+        details = filtered_details ? filtered_details : details
+        # if modern subscription and have resource groups, we need to filter them here
+        if details[0]["kind"] == "modern" && resource_groups
+          details = details.select { |cost| resource_groups.include?(cost['properties']["resourceGroup"].downcase) }
+        end
+        details
       elsif response.code == 504
         raise Net::ReadTimeout
       else
