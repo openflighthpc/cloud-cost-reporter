@@ -147,6 +147,7 @@ class AzureProject < Project
     end
 
     overall_usage = get_overall_usage(date, customer_facing)
+    currency = total_cost_log.currency
 
     msg = [
         "#{"*Cached report*" if cached}",
@@ -398,7 +399,8 @@ class AzureProject < Project
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     if !total_cost_log || rerun
       subscription_version = cost_entries.first["kind"]
-      currency = cost_entries.first["billingCurrency"]
+      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+      currency = cost_entries.first["properties"][currency_key]
       cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
       daily_cost = begin
                     cost_entries.map { |c| c['properties'][cost_key] }.reduce(:+)
@@ -408,7 +410,7 @@ class AzureProject < Project
       daily_cost ||= 0.0
 
       if rerun && total_cost_log
-        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
+        total_cost_log.assign_attributes(cost: daily_cost, currency: currency, timestamp: Time.now.to_s)
         total_cost_log.save!
       else
         total_cost_log = CostLog.create(
@@ -430,7 +432,8 @@ class AzureProject < Project
 
     if !compute_cost_log || rerun
       subscription_version = cost_entries.first["kind"]
-      currency = cost_entries.first["billingCurrency"]
+      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+      currency = cost_entries.first["properties"][currency_key]
       cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
       compute_costs = cost_entries.select do |cost|
         meter_category = subscription_version == "modern" ? cost["properties"]["meterCategory"] : cost["properties"]["meterDetails"]["meterCategory"]
@@ -449,14 +452,12 @@ class AzureProject < Project
           cost_breakdown[group] += value
         end
       end
-
-      puts compute_costs
       
       cost_breakdown.each do |key, value|
         scope = key == :total ? "compute" : key
         log = self.cost_logs.find_by(date: date.to_s, scope: scope)
         if log && rerun
-          log.assign_attributes(cost: cost_breakdown[key], timestamp: Time.now.to_s)
+          log.assign_attributes(cost: cost_breakdown[key], currency: currency, timestamp: Time.now.to_s)
           log.save!
         elsif !log
           log = CostLog.create(
@@ -480,7 +481,8 @@ class AzureProject < Project
 
     if !core_cost_log || rerun
       subscription_version = cost_entries.first["kind"]
-      currency = cost_entries.first["billingCurrency"]
+      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+      currency = cost_entries.first["properties"][currency_key]
       core_costs = cost_entries.select do |cost|
         meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
         cost["tags"] && cost["tags"]["type"] == "core" &&
@@ -495,7 +497,7 @@ class AzureProject < Project
                      end
       core_cost ||= 0.0
       if rerun && core_cost_log
-        core_cost_log.assign_attributes(cost: core_cost, timestamp: Time.now.to_s)
+        core_cost_log.assign_attributes(cost: core_cost, currency: currency, timestamp: Time.now.to_s)
         core_cost_log.save!
       else
         core_cost_log = CostLog.create(
@@ -518,7 +520,8 @@ class AzureProject < Project
     # only calculate if don't already have data in logs, or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
       subscription_version = cost_entries.first["kind"]
-      currency = cost_entries.first["billingCurrency"]
+      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+      currency = cost_entries.first["properties"][currency_key]
       cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
       data_out_costs = cost_entries.select do |cost| 
         meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
@@ -533,7 +536,7 @@ class AzureProject < Project
       end
       
       if data_out_cost_log && rerun
-        data_out_cost_log.assign_attributes(cost: data_out_cost, timestamp: Time.now.to_s)
+        data_out_cost_log.assign_attributes(cost: data_out_cost, currency: currency, timestamp: Time.now.to_s)
         data_out_cost_log.save!
       else
         data_out_cost_log = CostLog.create(
@@ -570,7 +573,8 @@ class AzureProject < Project
 
     if !storage_cost_log || rerun
       subscription_version = cost_entries.first["kind"]
-      currency = cost_entries.first["billingCurrency"]
+      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+      currency = cost_entries.first["properties"][currency_key]
       cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
       storage_costs = cost_entries.select do |cost|
         meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
@@ -583,7 +587,7 @@ class AzureProject < Project
                      end
       storage_cost ||= 0.0
       if rerun && storage_cost_log
-        storage_cost_log.assign_attributes(cost: storage_cost, timestamp: Time.now.to_s)
+        storage_cost_log.assign_attributes(cost: storage_cost, currency: currency, timestamp: Time.now.to_s)
         storage_cost_log.save!
       else
         storage_cost_log = CostLog.create(
