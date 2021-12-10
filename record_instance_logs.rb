@@ -30,7 +30,7 @@ require_relative './models/project_factory'
 def all_projects(rerun)
   ProjectFactory.new().all_active_projects_as_type.each do |project|
     begin
-      project.record_instance_logs(rerun)
+      puts "Project #{project.name}: #{project.record_instance_logs(rerun)}"
     rescue AzureApiError, AwsSdkError => e
       error = <<~MSG
       Generation of instance logs for project *#{project.name}* stopped due to error:
@@ -55,7 +55,7 @@ if ARGV[0] && ARGV[0] != "all"
   end
   project = ProjectFactory.new().as_type(project)
   begin
-    project.record_instance_logs(rerun)
+    puts "Project #{project.name}: #{project.record_instance_logs(rerun)}"
   rescue AzureApiError, AwsSdkError => e
     puts "Generation of instance logs for project #{project.name} stopped due to error: "
     puts e
@@ -65,4 +65,3 @@ if ARGV[0] && ARGV[0] != "all"
 else
   all_projects(rerun)
 end
-puts "Logs recorded."

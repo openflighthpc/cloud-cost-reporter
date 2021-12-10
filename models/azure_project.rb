@@ -305,13 +305,28 @@ class AzureProject < Project
   end
 
   def record_instance_logs(rerun=false)
-    return if self.end_date # can't record instance logs if cluster is no more
+    # can't record instance logs if resource group deleted
+    if self.end_date && Date.parse(self.end_date) <= Date.today
+      return "Logs not recorded, project has ended"
+    end
 
+    outcome = ""
     refresh_auth_token
     today_logs = self.instance_logs.where('timestamp LIKE ?', "%#{Date.today}%")
+    if today_logs.any?
+      if rerun 
+        outcome = "Overwriting existing logs. "
+      else
+        return "Logs already recorded for today. Run script again with 'rerun' to overwrite existing logs."
+      end
+    else
+      outcome = "Writing new logs for today. "
+    end
     today_logs.delete_all if rerun
+    log_recorded = false
     if !today_logs.any?
       active_nodes = api_query_active_nodes
+      any_nodes = active_nodes.any?
       active_nodes&.each do |node|
         # Azure API returns ids with inconsistent capitalisations so need to edit them here
         instance_id = node['id']
@@ -332,7 +347,7 @@ class AzureProject < Project
         type = cnode['properties']['hardwareProfile']['vmSize']
         compute = cnode.key?('tags') && cnode['tags']['type'] == 'compute'
         compute_group = cnode.key?('tags') ? cnode['tags']['compute_group'] : nil
-        InstanceLog.create(
+        log = InstanceLog.create(
           instance_id: instance_id,
           project_id: id,
           instance_type: type,
@@ -344,8 +359,11 @@ class AzureProject < Project
           region: region,
           timestamp: Time.now.to_s
         )
+        log_recorded = true if log.valid? && log.persisted?
       end
     end
+    outcome << (log_recorded ? "Logs recorded" : (any_nodes ? "Logs NOT recorded" : "No logs to record"))
+    outcome
   end
 
   def get_overall_usage(date, customer_facing=false)
