@@ -28,9 +28,9 @@
 require_relative './models/azure_project.rb'
 
 # Need Azure credentials to get instance list, so use a project in database.
-project = AzureProject.first
+project = AzureProject.active.first
 if !project
-  puts "No Azure projects in database to retrieve price list"
+  puts "No active Azure projects in database to retrieve price list"
 else
   project.get_instance_sizes
 end
