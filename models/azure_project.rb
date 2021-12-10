@@ -491,7 +491,7 @@ class AzureProject < Project
       end
       cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
       core_cost = begin
-                      core_costs.map { |c| c['properties']['cost_key'] }.reduce(:+)
+                      core_costs.map { |c| c['properties'][cost_key] }.reduce(:+)
                      rescue NoMethodError
                       0.0
                      end
