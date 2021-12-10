@@ -398,15 +398,18 @@ class AzureProject < Project
   def get_total_costs(cost_entries, date, rerun)
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     if !total_cost_log || rerun
-      subscription_version = cost_entries.first["kind"]
-      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
-      currency = cost_entries.first["properties"][currency_key]
-      cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
-      daily_cost = begin
-                    cost_entries.map { |c| c['properties'][cost_key] }.reduce(:+)
-                  rescue NoMethodError
-                    0.0
-                  end
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        daily_cost = begin
+                       cost_entries.map { |c| c['properties'][cost_key] }.reduce(:+)
+                    rescue NoMethodError
+                      0.0
+                    end
+      end
+      currency ||= "GBP"
       daily_cost ||= 0.0
 
       if rerun && total_cost_log
@@ -431,15 +434,19 @@ class AzureProject < Project
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
     if !compute_cost_log || rerun
-      subscription_version = cost_entries.first["kind"]
-      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
-      currency = cost_entries.first["properties"][currency_key]
-      cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
-      compute_costs = cost_entries.select do |cost|
-        meter_category = subscription_version == "modern" ? cost["properties"]["meterCategory"] : cost["properties"]["meterDetails"]["meterCategory"]
-        cost["tags"] && cost["tags"]["type"] == "compute" &&
-        meter_category == "Virtual Machines"
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        compute_costs = cost_entries.select do |cost|
+          meter_category = subscription_version == "modern" ? cost["properties"]["meterCategory"] : cost["properties"]["meterDetails"]["meterCategory"]
+          cost["tags"] && cost["tags"]["type"] == "compute" &&
+          meter_category == "Virtual Machines"
+        end
       end
+      compute_costs ||= []
+      currency ||= "GBP"
 
       cost_breakdown = {total: 0.0}
       compute_costs.each do |cost|
@@ -480,21 +487,24 @@ class AzureProject < Project
     core_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "core")
 
     if !core_cost_log || rerun
-      subscription_version = cost_entries.first["kind"]
-      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
-      currency = cost_entries.first["properties"][currency_key]
-      core_costs = cost_entries.select do |cost|
-        meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
-        cost["tags"] && cost["tags"]["type"] == "core" &&
-        meter_name != "Data Transfer Out" && 
-        !meter_name.include?("Disks")
-      end
-      cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
-      core_cost = begin
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        core_costs = cost_entries.select do |cost|
+          meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
+          cost["tags"] && cost["tags"]["type"] == "core" &&
+          meter_name != "Data Transfer Out" && 
+          !meter_name.include?("Disks")
+        end
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        core_cost = begin
                       core_costs.map { |c| c['properties'][cost_key] }.reduce(:+)
-                     rescue NoMethodError
+                    rescue NoMethodError
                       0.0
-                     end
+                    end
+      end
+      currency ||= "GBP"
       core_cost ||= 0.0
       if rerun && core_cost_log
         core_cost_log.assign_attributes(cost: core_cost, currency: currency, timestamp: Time.now.to_s)
@@ -519,14 +529,18 @@ class AzureProject < Project
     data_out_figures = nil
     # only calculate if don't already have data in logs, or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
-      subscription_version = cost_entries.first["kind"]
-      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
-      currency = cost_entries.first["properties"][currency_key]
-      cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
-      data_out_costs = cost_entries.select do |cost| 
-        meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
-        meter_name == "Data Transfer Out"
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        data_out_costs = cost_entries.select do |cost| 
+          meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
+          meter_name == "Data Transfer Out"
+        end
       end
+      data_out_costs ||= []
+      currentcy ||= "GBP"
 
       data_out_cost = 0.0
       data_out_amount = 0.0
@@ -572,20 +586,23 @@ class AzureProject < Project
     storage_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "storage")
 
     if !storage_cost_log || rerun
-      subscription_version = cost_entries.first["kind"]
-      currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
-      currency = cost_entries.first["properties"][currency_key]
-      cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
-      storage_costs = cost_entries.select do |cost|
-        meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
-        meter_name.include?("Disks")
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        storage_costs = cost_entries.select do |cost|
+          meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
+          meter_name.include?("Disks")
+        end
+        storage_cost = begin
+                        storage_costs.map { |c| c['properties'][cost_key] }.reduce(:+)
+                       rescue NoMethodError
+                        0.0
+                       end
       end
-      storage_cost = begin
-                      storage_costs.map { |c| c['properties'][cost_key] }.reduce(:+)
-                     rescue NoMethodError
-                      0.0
-                     end
       storage_cost ||= 0.0
+      currency ||= "GBP"
       if rerun && storage_cost_log
         storage_cost_log.assign_attributes(cost: storage_cost, currency: currency, timestamp: Time.now.to_s)
         storage_cost_log.save!
