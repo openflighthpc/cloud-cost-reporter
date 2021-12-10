@@ -660,7 +660,11 @@ class AzureProject < Project
     end 
   end
 
+  # The Azure API now treats 'modern' and 'legacy' subscriptions differently.
+  # Despite being the same API, with the same version, these types expect different
+  # params. The responses are also in different formats. This method caters to both.
   def api_query_cost(start_date, end_date=start_date)
+    # This is for 'legacy', which the API can filter by resource group
     resource_groups_conditional = ""
     if filter_level == "resource group"
       self.resource_groups.each_with_index do |group, index|
@@ -693,11 +697,13 @@ class AzureProject < Project
       )
       if response.success?
         details = response['value']
+        subscription_version = details[0]["kind"] if details.length > 0
         # Sometimes Azure will duplicate cost items, or have cost items with the same name/id but different
         # details. We will remove the full duplicates and keep those with the same name/id but different details.
         # We assume there is no more than 1 duplicate for each
         if details.length > 1
-          details.sort_by! { |cost| [cost["name"], cost['properties']['costInBillingCurrency']] }
+          cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+          details.sort_by! { |cost| [cost["name"], cost['properties'][cost_key]] }
           previous = nil
           filtered_details = details.reject.with_index do |cost, index|
             result = false
@@ -710,7 +716,7 @@ class AzureProject < Project
         end
         details = filtered_details ? filtered_details : details
         # if modern subscription and have resource groups, we need to filter them here
-        if details[0]["kind"] == "modern" && resource_groups
+        if details.length > 0 && subscription_version == "modern" && resource_groups
           details = details.select { |cost| resource_groups.include?(cost['properties']["resourceGroup"].downcase) }
         end
         details
