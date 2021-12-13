@@ -147,18 +147,19 @@ class AzureProject < Project
     end
 
     overall_usage = get_overall_usage(date, customer_facing)
+    currency = total_cost_log.currency
 
     msg = [
         "#{"*Cached report*" if cached}",
         ":moneybag: Usage for *#{self.name}* on #{date.to_s} :moneybag:",
-        "*Compute Costs (GBP):* #{compute_cost_log.cost.to_f.ceil(2)}",
+        "*Compute Costs (#{currency}):* #{compute_cost_log.cost.to_f.ceil(2)}",
         ("*Compute Units (Flat):* #{compute_cost_log.compute_cost}" if !short),
         ("*Compute Units (Risk):* #{compute_cost_log.risk_cost}\n" if !short),
         ("*Data Out (GB):* #{data_out_amount_log.amount.to_f.ceil(4)}" if !short),
-        "*Data Out Costs (GBP):* #{data_out_cost_log.cost.to_f.ceil(2)}",
+        "*Data Out Costs (#{currency}):* #{data_out_cost_log.cost.to_f.ceil(2)}",
         ("*Compute Units (Flat):* #{data_out_cost_log.compute_cost}" if !short),
         ("*Compute Units (Risk):* #{data_out_cost_log.risk_cost}\n" if !short),
-        "*Total Costs (GBP):* #{total_cost_log.cost.to_f.ceil(2)}",
+        "*Total Costs (#{currency}):* #{total_cost_log.cost.to_f.ceil(2)}",
         "*Total Compute Units (Flat):* #{total_cost_log.compute_cost}",
         "*Total Compute Units (Risk):* #{total_cost_log.risk_cost}",
         "#{"\n" if !short}*FC Credits:* #{total_cost_log.fc_credits_cost}",
@@ -199,7 +200,7 @@ class AzureProject < Project
       total_costs ||= 0.0
       total_costs = (total_costs * 12.5 * 1.25).ceil
 
-      data_out_costs = costs_this_month.select { |cost| cost["properties"]["meterDetails"]["meterName"] == "Data Transfer Out" }
+      data_out_costs = costs_this_month.select { |cost| cost["properties"]["meterName"] == "Data Transfer Out" }
 
       data_out_cost = 0.0
       data_out_amount = 0.0
@@ -211,7 +212,7 @@ class AzureProject < Project
 
       compute_costs_this_month = costs_this_month.select do |cost|
         cost["tags"] && cost["tags"]["type"] == "compute" &&
-        cost["properties"]["meterDetails"]["meterCategory"] == "Virtual Machines"
+        cost["properties"]["meterCategory"] == "Virtual Machines"
       end
       compute_costs = begin
                      compute_costs_this_month.map { |c| c['properties']['cost'] }.reduce(:+)
@@ -397,24 +398,28 @@ class AzureProject < Project
   def get_total_costs(cost_entries, date, rerun)
     total_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "total")
     if !total_cost_log || rerun
-      # the query has multiple values that sound useful (effectivePrice, cost, 
-      # quantity, unitPrice). 'cost' is the value that is used on the Azure Portal
-      # Cost Analysis page (under 'Actual Cost') for the period selected.
-      daily_cost = begin
-                    cost_entries.map { |c| c['properties']['cost'] }.reduce(:+)
-                  rescue NoMethodError
-                    0.0
-                  end
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        daily_cost = begin
+                       cost_entries.map { |c| c['properties'][cost_key] }.reduce(:+)
+                    rescue NoMethodError
+                      0.0
+                    end
+      end
+      currency ||= "GBP"
       daily_cost ||= 0.0
 
       if rerun && total_cost_log
-        total_cost_log.assign_attributes(cost: daily_cost, timestamp: Time.now.to_s)
+        total_cost_log.assign_attributes(cost: daily_cost, currency: currency, timestamp: Time.now.to_s)
         total_cost_log.save!
       else
         total_cost_log = CostLog.create(
           project_id: id,
           cost: daily_cost,
-          currency: 'GBP',
+          currency: currency,
           scope: 'total',
           date: date.to_s,
           timestamp: Time.now.to_s
@@ -429,14 +434,23 @@ class AzureProject < Project
     compute_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "compute")
 
     if !compute_cost_log || rerun
-      compute_costs = cost_entries.select do |cost|
-        cost["tags"] && cost["tags"]["type"] == "compute" &&
-        cost["properties"]["meterDetails"]["meterCategory"] == "Virtual Machines"
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        compute_costs = cost_entries.select do |cost|
+          meter_category = subscription_version == "modern" ? cost["properties"]["meterCategory"] : cost["properties"]["meterDetails"]["meterCategory"]
+          cost["tags"] && cost["tags"]["type"] == "compute" &&
+          meter_category == "Virtual Machines"
+        end
       end
+      compute_costs ||= []
+      currency ||= "GBP"
 
       cost_breakdown = {total: 0.0}
       compute_costs.each do |cost|
-        value = cost['properties']['cost']
+        value = cost['properties'][cost_key]
         group = cost["tags"] ? cost["tags"]["compute_group"] : nil
         cost_breakdown[:total] += value
         if group && !cost_breakdown.has_key?(group)
@@ -450,13 +464,13 @@ class AzureProject < Project
         scope = key == :total ? "compute" : key
         log = self.cost_logs.find_by(date: date.to_s, scope: scope)
         if log && rerun
-          log.assign_attributes(cost: cost_breakdown[key], timestamp: Time.now.to_s)
+          log.assign_attributes(cost: cost_breakdown[key], currency: currency, timestamp: Time.now.to_s)
           log.save!
         elsif !log
           log = CostLog.create(
             project_id: id,
             cost: value,
-            currency: 'GBP',
+            currency: currency,
             scope: scope,
             date: date.to_s,
             timestamp: Time.now.to_s
@@ -473,25 +487,33 @@ class AzureProject < Project
     core_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "core")
 
     if !core_cost_log || rerun
-      core_costs = cost_entries.select do |cost|
-        cost["tags"] && cost["tags"]["type"] == "core" &&
-        cost["properties"]["meterDetails"]["meterName"] != "Data Transfer Out" && 
-        !cost["properties"]["meterDetails"]["meterName"].include?("Disks")
-      end  
-      core_cost = begin
-                      core_costs.map { |c| c['properties']['cost'] }.reduce(:+)
-                     rescue NoMethodError
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        core_costs = cost_entries.select do |cost|
+          meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
+          cost["tags"] && cost["tags"]["type"] == "core" &&
+          meter_name != "Data Transfer Out" && 
+          !meter_name.include?("Disks")
+        end
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        core_cost = begin
+                      core_costs.map { |c| c['properties'][cost_key] }.reduce(:+)
+                    rescue NoMethodError
                       0.0
-                     end
+                    end
+      end
+      currency ||= "GBP"
       core_cost ||= 0.0
       if rerun && core_cost_log
-        core_cost_log.assign_attributes(cost: core_cost, timestamp: Time.now.to_s)
+        core_cost_log.assign_attributes(cost: core_cost, currency: currency, timestamp: Time.now.to_s)
         core_cost_log.save!
       else
         core_cost_log = CostLog.create(
           project_id: id,
           cost: core_cost,
-          currency: 'GBP',
+          currency: currency,
           scope: 'core',
           date: date.to_s,
           timestamp: Time.now.to_s
@@ -507,23 +529,34 @@ class AzureProject < Project
     data_out_figures = nil
     # only calculate if don't already have data in logs, or asked to recalculate
     if !data_out_cost_log || !data_out_amount_log || rerun
-      data_out_costs = cost_entries.select { |cost| cost["properties"]["meterDetails"]["meterName"] == "Data Transfer Out" }
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        data_out_costs = cost_entries.select do |cost| 
+          meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
+          meter_name == "Data Transfer Out"
+        end
+      end
+      data_out_costs ||= []
+      currentcy ||= "GBP"
 
       data_out_cost = 0.0
       data_out_amount = 0.0
       data_out_costs.each do |cost|
-        data_out_cost += cost['properties']['cost']
+        data_out_cost += cost['properties'][cost_key]
         data_out_amount += cost['properties']['quantity']
       end
       
       if data_out_cost_log && rerun
-        data_out_cost_log.assign_attributes(cost: data_out_cost, timestamp: Time.now.to_s)
+        data_out_cost_log.assign_attributes(cost: data_out_cost, currency: currency, timestamp: Time.now.to_s)
         data_out_cost_log.save!
       else
         data_out_cost_log = CostLog.create(
           project_id: self.id,
           cost: data_out_cost,
-          currency: "GBP",
+          currency: currency,
           date: date.to_s,
           scope: "data_out",
           timestamp: Time.now.to_s
@@ -553,21 +586,31 @@ class AzureProject < Project
     storage_cost_log = self.cost_logs.find_by(date: date.to_s, scope: "storage")
 
     if !storage_cost_log || rerun
-      storage_costs = cost_entries.select { |cost| cost["properties"]["meterDetails"]["meterName"].include?("Disks") }
-      storage_cost = begin
-                      storage_costs.map { |c| c['properties']['cost'] }.reduce(:+)
-                     rescue NoMethodError
-                      0.0
-                     end
+      if cost_entries.any?
+        subscription_version = cost_entries.first["kind"]
+        currency_key = subscription_version == "modern" ? "billingCurrencyCode" : "billingCurrency"
+        currency = cost_entries.first["properties"][currency_key]
+        cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+        storage_costs = cost_entries.select do |cost|
+          meter_name = subscription_version == "modern" ? cost["properties"]["meterName"] : cost["properties"]["meterDetails"]["meterName"]
+          meter_name.include?("Disks")
+        end
+        storage_cost = begin
+                        storage_costs.map { |c| c['properties'][cost_key] }.reduce(:+)
+                       rescue NoMethodError
+                        0.0
+                       end
+      end
       storage_cost ||= 0.0
+      currency ||= "GBP"
       if rerun && storage_cost_log
-        storage_cost_log.assign_attributes(cost: storage_cost, timestamp: Time.now.to_s)
+        storage_cost_log.assign_attributes(cost: storage_cost, currency: currency, timestamp: Time.now.to_s)
         storage_cost_log.save!
       else
         storage_cost_log = CostLog.create(
           project_id: id,
           cost: storage_cost,
-          currency: 'GBP',
+          currency: currency,
           scope: 'storage',
           date: date.to_s,
           timestamp: Time.now.to_s
@@ -634,7 +677,11 @@ class AzureProject < Project
     end 
   end
 
+  # The Azure API now treats 'modern' and 'legacy' subscriptions differently.
+  # Despite being the same API, with the same version, these types expect different
+  # params. The responses are also in different formats. This method caters to both.
   def api_query_cost(start_date, end_date=start_date)
+    # This is for 'legacy', which the API can filter by resource group
     resource_groups_conditional = ""
     if filter_level == "resource group"
       self.resource_groups.each_with_index do |group, index|
@@ -650,7 +697,9 @@ class AzureProject < Project
     uri = "https://management.azure.com/subscriptions/#{subscription_id}/providers/Microsoft.Consumption/usageDetails?$expand=meterDetails"
     query = {
       'api-version': '2019-10-01',
-      '$filter': filter
+      '$filter': filter,
+      'startDate': start_date,
+      'endDate': end_date
     }
     attempt = 0
     error = AzureApiError.new("Timeout error querying daily cost Azure API for project"\
@@ -665,11 +714,13 @@ class AzureProject < Project
       )
       if response.success?
         details = response['value']
+        subscription_version = details[0]["kind"] if details.length > 0
         # Sometimes Azure will duplicate cost items, or have cost items with the same name/id but different
         # details. We will remove the full duplicates and keep those with the same name/id but different details.
         # We assume there is no more than 1 duplicate for each
         if details.length > 1
-          details.sort_by! { |cost| [cost["name"], cost['properties']['cost']] }
+          cost_key = subscription_version == "modern" ? "costInBillingCurrency" : "cost"
+          details.sort_by! { |cost| [cost["name"], cost['properties'][cost_key]] }
           previous = nil
           filtered_details = details.reject.with_index do |cost, index|
             result = false
@@ -680,7 +731,12 @@ class AzureProject < Project
             result
           end
         end
-        filtered_details ? filtered_details : details
+        details = filtered_details ? filtered_details : details
+        # if modern subscription and have resource groups, we need to filter them here
+        if details.length > 0 && subscription_version == "modern" && resource_groups
+          details = details.select { |cost| resource_groups.include?(cost['properties']["resourceGroup"].downcase) }
+        end
+        details
       elsif response.code == 504
         raise Net::ReadTimeout
       else
